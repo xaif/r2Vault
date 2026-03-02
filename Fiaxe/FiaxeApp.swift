@@ -1,17 +1,19 @@
-//
-//  FiaxeApp.swift
-//  Fiaxe
-//
-//  Created by Xaif on 02/03/26.
-//
-
 import SwiftUI
 
 @main
-struct FiaxeApp: App {
+struct R2VaultApp: App {
+    @State private var viewModel = AppViewModel()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(viewModel)
+        }
+        .defaultSize(width: 800, height: 560)
+
+        Settings {
+            SettingsView()
+                .environment(viewModel)
         }
     }
 }
