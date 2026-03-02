@@ -36,9 +36,11 @@
 - Multiple R2 bucket support with saved credentials
 - Presigned URL generation for secure sharing
 
-## Screenshots
+## Screenshot
 
-<!-- Add screenshots here -->
+<p align="center">
+  <img src="assets/screenshot.png" width="800" alt="r2Vault — Browse your R2 bucket" />
+</p>
 
 ## Getting Started
 
