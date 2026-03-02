@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// A single row for List view — unified files + folders, with selection support.
 struct R2ObjectRow: View {
@@ -7,6 +8,12 @@ struct R2ObjectRow: View {
     let isSelected: Bool
     let onNavigate: (R2Object) -> Void
     let onCopyURL: (String) -> Void
+    let onPreview: (R2Object) -> Void
+    let onDownload: (URL, URL) -> Void  // (remoteURL, destinationURL)
+    let onDelete: (R2Object) -> Void
+
+    @State private var copied = false
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -40,30 +47,71 @@ struct R2ObjectRow: View {
                 .font(.callout)
                 .frame(width: 140, alignment: .trailing)
 
-            // Action button
-            Group {
-                if object.isFolder {
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
+            // Action buttons
+            if object.isFolder {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 80)
+            } else {
+                HStack(spacing: 8) {
                     Button {
                         let url = credentials.publicURL(forKey: object.key)
                         onCopyURL(url.absoluteString)
+                        withAnimation(.easeInOut(duration: 0.15)) { copied = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            withAnimation(.easeInOut(duration: 0.2)) { copied = false }
+                        }
                     } label: {
-                        Image(systemName: "doc.on.clipboard")
-                            .foregroundStyle(isSelected ? .white.opacity(0.7) : .secondary)
+                        Image(systemName: copied ? "checkmark" : "link")
+                            .foregroundStyle(copied ? .green : .secondary)
+                            .frame(width: 14)
                     }
                     .buttonStyle(.plain)
-                    .help("Copy public URL")
+                    .help(copied ? "Copied!" : "Copy public URL")
+
+                    Button {
+                        guard let remoteURL = AWSV4Signer.presignedURL(for: object.key, credentials: credentials) else { return }
+                        let panel = NSSavePanel()
+                        panel.nameFieldStringValue = object.name
+                        panel.canCreateDirectories = true
+                        guard panel.runModal() == .OK, let dest = panel.url else { return }
+                        onDownload(remoteURL, dest)
+                    } label: {
+                        Image(systemName: "arrow.down.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Download")
+
+                    Button { showDeleteConfirm = true } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Delete")
                 }
+                .frame(width: 80, alignment: .trailing)
             }
-            .frame(width: 22)
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
-            if object.isFolder { onNavigate(object) }
+            if object.isFolder {
+                onNavigate(object)
+            } else {
+                onPreview(object)
+            }
+        }
+        .confirmationDialog(
+            "Delete \"\(object.name)\"?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { onDelete(object) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove the file from R2 and cannot be undone.")
         }
     }
 
@@ -143,7 +191,10 @@ struct R2IconCell: View {
                     credentials: credentials,
                     isSelected: isSelected,
                     onNavigate: onNavigate,
-                    onCopyURL: onCopyURL
+                    onCopyURL: onCopyURL,
+                    onPreview: { _ in },
+                    onDownload: { _, _ in },
+                    onDelete: { _ in }
                 ).iconName)
                 .font(.system(size: 36))
                 .foregroundStyle(object.isFolder ? Color.accentColor : .secondary)

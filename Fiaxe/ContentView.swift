@@ -113,7 +113,9 @@ struct ContentView: View {
         switch selection {
         case .bucket(let id):
             BrowserView()
+                .id(id)
                 .onAppear { viewModel.selectCredentials(id: id) }
+                .onChange(of: id) { _, newID in viewModel.selectCredentials(id: newID) }
         case .history:
             UploadHistoryView()
         case .settings:

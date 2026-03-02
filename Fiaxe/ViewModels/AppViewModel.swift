@@ -43,10 +43,30 @@ final class AppViewModel {
     var alertMessage: String?
     var showAlert = false
 
+    // Update state
+    enum UpdateStatus {
+        case idle
+        case checking
+        case upToDate
+        case available(GitHubRelease)
+        case failed(String)
+
+        var isChecking: Bool {
+            if case .checking = self { return true }
+            return false
+        }
+    }
+    var updateStatus: UpdateStatus = .idle
+    var updaterState: AppUpdater.State = .idle
+
     // MARK: - Browser state
 
     /// The current folder prefix (e.g. "photos/vacation/"). Empty string = root.
     var currentPrefix: String = ""
+    /// Prefixes we can go back to
+    var backStack: [String] = []
+    /// Prefixes we can go forward to (cleared on any new navigation)
+    var forwardStack: [String] = []
     /// Files in the current folder
     var browserObjects: [R2Object] = []
     /// Subfolders in the current folder
@@ -64,7 +84,7 @@ final class AppViewModel {
     }
 
     // View preferences
-    var viewMode: BrowserViewMode = .icons
+    var viewMode: BrowserViewMode = .list
     var sortKey: BrowserSortKey = .name
     var sortAscending: Bool = true
     var filterText: String = ""
@@ -107,6 +127,10 @@ final class AppViewModel {
 
     init() {
         loadCredentials()
+        checkForUpdates()
+        AppUpdater.shared.onStateChange = { [self] in
+            updaterState = AppUpdater.shared.state
+        }
     }
 
     // MARK: - Credentials
@@ -123,16 +147,31 @@ final class AppViewModel {
     }
 
     func saveCredentials(_ creds: R2Credentials) {
+        let isNew = !credentialsList.contains(where: { $0.id == creds.id })
         if let idx = credentialsList.firstIndex(where: { $0.id == creds.id }) {
             credentialsList[idx] = creds
         } else {
             credentialsList.append(creds)
         }
-        selectedCredentialID = creds.id
         do {
             try KeychainService.saveAll(credentialsList)
         } catch {
             showError("Failed to save credentials: \(error.localizedDescription)")
+        }
+        if isNew {
+            // New bucket: reset browser and load fresh
+            selectedCredentialID = creds.id
+            currentPrefix = ""
+            backStack = []
+            forwardStack = []
+            browserObjects = []
+            browserFolders = []
+            browserError = nil
+            selectedObjectIDs = []
+            Task { await ThumbnailCache.shared.clearMemory() }
+            loadCurrentFolder()
+        } else {
+            selectedCredentialID = creds.id
         }
     }
 
@@ -149,7 +188,17 @@ final class AppViewModel {
     }
 
     func selectCredentials(id: UUID) {
+        guard id != selectedCredentialID else { return }
         selectedCredentialID = id
+        currentPrefix = ""
+        backStack = []
+        forwardStack = []
+        browserObjects = []
+        browserFolders = []
+        browserError = nil
+        selectedObjectIDs = []
+        Task { await ThumbnailCache.shared.clearMemory() }
+        loadCurrentFolder()
     }
 
     func testConnection() async -> Bool {
@@ -163,6 +212,9 @@ final class AppViewModel {
     }
 
     // MARK: - Browser Navigation
+
+    var canGoBack: Bool { !backStack.isEmpty }
+    var canGoForward: Bool { !forwardStack.isEmpty }
 
     func loadCurrentFolder() {
         guard let credentials else {
@@ -189,6 +241,8 @@ final class AppViewModel {
     }
 
     func navigateToFolder(_ object: R2Object) {
+        backStack.append(currentPrefix)
+        forwardStack.removeAll()
         currentPrefix = object.key
         loadCurrentFolder()
     }
@@ -197,14 +251,34 @@ final class AppViewModel {
     func navigateToSegment(_ index: Int) {
         let segments = pathSegments
         guard index < segments.count else { return }
-        // Rebuild prefix up to and including the chosen segment
         let newSegments = Array(segments.prefix(index + 1))
-        currentPrefix = newSegments.joined(separator: "/") + "/"
+        let newPrefix = newSegments.joined(separator: "/") + "/"
+        guard newPrefix != currentPrefix else { return }
+        backStack.append(currentPrefix)
+        forwardStack.removeAll()
+        currentPrefix = newPrefix
         loadCurrentFolder()
     }
 
     func navigateToRoot() {
+        guard !currentPrefix.isEmpty else { return }
+        backStack.append(currentPrefix)
+        forwardStack.removeAll()
         currentPrefix = ""
+        loadCurrentFolder()
+    }
+
+    func navigateBack() {
+        guard let previous = backStack.popLast() else { return }
+        forwardStack.append(currentPrefix)
+        currentPrefix = previous
+        loadCurrentFolder()
+    }
+
+    func navigateForward() {
+        guard let next = forwardStack.popLast() else { return }
+        backStack.append(currentPrefix)
+        currentPrefix = next
         loadCurrentFolder()
     }
 
@@ -429,6 +503,44 @@ final class AppViewModel {
         } catch {
             uploadTask.status = .failed
             uploadTask.errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Download
+
+    /// Returns a presigned download URL for the given object, or nil if credentials are missing.
+    func presignedDownloadURL(for object: R2Object) -> URL? {
+        guard let credentials else { return nil }
+        return AWSV4Signer.presignedURL(for: object.key, credentials: credentials)
+    }
+
+    func downloadToDestination(from remoteURL: URL, dest: URL) {
+        Task {
+            do {
+                let (tmpURL, _) = try await URLSession.shared.download(from: remoteURL)
+                try? FileManager.default.removeItem(at: dest)
+                try FileManager.default.moveItem(at: tmpURL, to: dest)
+            } catch {
+                await MainActor.run { showError("Download failed: \(error.localizedDescription)") }
+            }
+        }
+    }
+
+    // MARK: - Updates
+
+    func checkForUpdates() {
+        guard !updateStatus.isChecking else { return }
+        updateStatus = .checking
+        Task {
+            do {
+                if let release = try await UpdateService.checkForUpdate() {
+                    updateStatus = .available(release)
+                } else {
+                    updateStatus = .upToDate
+                }
+            } catch {
+                updateStatus = .failed(error.localizedDescription)
+            }
         }
     }
 

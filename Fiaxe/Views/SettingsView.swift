@@ -5,7 +5,6 @@ struct SettingsView: View {
 
     @State private var selectedCredentialID: UUID? = nil
     @State private var editingCredentialID: UUID? = nil
-
     @State private var accountId = ""
     @State private var accessKeyId = ""
     @State private var secretAccessKey = ""

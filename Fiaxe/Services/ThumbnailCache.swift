@@ -28,19 +28,21 @@ actor ThumbnailCache {
     /// Returns a cached thumbnail or fetches it using a presigned URL.
     /// `key` is the R2 object key used as cache identifier.
     func thumbnail(for key: String, credentials: R2Credentials) async -> NSImage? {
-        let cacheKey = key as NSString
+        // Scope cache key by bucket so different buckets never share thumbnails
+        let scopedKey = "\(credentials.bucketName)/\(key)"
+        let cacheKey = scopedKey as NSString
 
         // 1. Memory cache hit
         if let img = memoryCache.object(forKey: cacheKey) { return img }
 
         // 2. Disk cache hit
-        if let img = loadFromDisk(key: key) {
+        if let img = loadFromDisk(key: scopedKey) {
             memoryCache.setObject(img, forKey: cacheKey)
             return img
         }
 
         // 3. Coalesce in-flight requests
-        if let task = inFlight[key] { return await task.value }
+        if let task = inFlight[scopedKey] { return await task.value }
 
         // Generate presigned URL — works whether or not a custom domain is set
         guard let url = AWSV4Signer.presignedURL(for: key, credentials: credentials) else {
@@ -51,13 +53,13 @@ actor ThumbnailCache {
             let img = await fetchThumbnail(url: url, key: key)
             if let img {
                 memoryCache.setObject(img, forKey: cacheKey)
-                saveToDisk(img, key: key)
+                saveToDisk(img, key: scopedKey)
             }
             return img
         }
-        inFlight[key] = task
+        inFlight[scopedKey] = task
         let result = await task.value
-        inFlight.removeValue(forKey: key)
+        inFlight.removeValue(forKey: scopedKey)
         return result
     }
 

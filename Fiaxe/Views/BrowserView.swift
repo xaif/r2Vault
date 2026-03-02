@@ -143,13 +143,13 @@ struct BrowserView: View {
                         .onTapGesture(count: 2) {
                             if item.isFolder {
                                 viewModel.navigateToFolder(item)
+                            } else {
+                                QuickLookCoordinator.shared.preview(
+                                    item,
+                                    credentials: viewModel.credentials ?? .empty
+                                )
                             }
                         }
-                    .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            toggleSelection(item)
-                        }
-                    }
                     .contextMenu { rowContextMenu(for: item) }
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
@@ -171,16 +171,18 @@ struct BrowserView: View {
         VStack(spacing: 0) {
             listHeader
             Divider()
-            List(selection: selectionBinding) {
+            List {
                 ForEach(viewModel.allBrowserItems) { item in
                     R2ObjectRow(
                         object: item,
                         credentials: viewModel.credentials ?? .empty,
-                        isSelected: viewModel.selectedObjectIDs.contains(item.id),
+                        isSelected: false,
                         onNavigate: { viewModel.navigateToFolder($0) },
-                        onCopyURL: { viewModel.copyToClipboard($0) }
+                        onCopyURL: { viewModel.copyToClipboard($0) },
+                        onPreview: { QuickLookCoordinator.shared.preview($0, credentials: viewModel.credentials ?? .empty) },
+                        onDownload: { viewModel.downloadToDestination(from: $0, dest: $1) },
+                        onDelete: { item in Task { await viewModel.deleteObject(item) } }
                     )
-                    .tag(item.id)
                     .contextMenu { rowContextMenu(for: item) }
                 }
             }
@@ -330,6 +332,11 @@ struct BrowserView: View {
             Divider()
         } else {
             Button {
+                QuickLookCoordinator.shared.preview(item, credentials: viewModel.credentials ?? .empty)
+            } label: {
+                Label("Preview", systemImage: "eye")
+            }
+            Button {
                 let url = (viewModel.credentials ?? .empty).publicURL(forKey: item.key)
                 viewModel.copyToClipboard(url.absoluteString)
             } label: {
@@ -350,19 +357,20 @@ struct BrowserView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        // Back button — left navigation area
+        // Back / Forward buttons — left navigation area
         ToolbarItem(placement: .navigation) {
-            Button {
-                let segs = viewModel.pathSegments
-                if segs.isEmpty { return }
-                let idx = segs.count - 2
-                if idx < 0 { viewModel.navigateToRoot() }
-                else { viewModel.navigateToSegment(idx) }
-            } label: {
+            Button { viewModel.navigateBack() } label: {
                 Image(systemName: "chevron.left")
             }
-            .disabled(viewModel.pathSegments.isEmpty)
+            .disabled(!viewModel.canGoBack)
             .help("Back")
+        }
+        ToolbarItem(placement: .navigation) {
+            Button { viewModel.navigateForward() } label: {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(!viewModel.canGoForward)
+            .help("Forward")
         }
 
         // Compact segmented view mode picker
@@ -371,8 +379,8 @@ struct BrowserView: View {
                 get: { viewModel.viewMode },
                 set: { viewModel.viewMode = $0 }
             )) {
-                Image(systemName: "square.grid.2x2").tag(BrowserViewMode.icons)
                 Image(systemName: "list.bullet").tag(BrowserViewMode.list)
+                Image(systemName: "square.grid.2x2").tag(BrowserViewMode.icons)
             }
             .pickerStyle(.segmented)
             .frame(width: 72)

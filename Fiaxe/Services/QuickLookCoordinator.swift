@@ -13,23 +13,18 @@ private final class PreviewItem: NSObject, QLPreviewItem {
 }
 
 /// Manages the system Quick Look panel (spacebar / double-click preview).
-/// Downloads the file to a temp location, then presents QLPreviewPanel.
+/// Streams the file directly from R2 via a presigned URL — no download required.
 @MainActor
 final class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
 
     static let shared = QuickLookCoordinator()
 
     private var previewItem: PreviewItem? = nil
-    private var downloadTask: Task<Void, Never>? = nil
 
     private override init() { super.init() }
 
     /// Call this when the user presses spacebar or double-clicks a file.
     func preview(_ object: R2Object, credentials: R2Credentials) {
-        // Cancel any previous download
-        downloadTask?.cancel()
-        previewItem = nil
-
         let panel = QLPreviewPanel.shared()!
 
         // Toggle: if already visible for same coordinator, close it
@@ -38,29 +33,15 @@ final class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewP
             return
         }
 
+        // Generate a presigned URL and pass it directly to Quick Look — no download needed.
+        // previewItemTitle supplies the filename so QL picks the right previewer plugin.
+        guard let presignedURL = AWSV4Signer.presignedURL(for: object.key, credentials: credentials) else { return }
+        previewItem = PreviewItem(url: presignedURL, title: object.name)
+
         panel.dataSource = self
         panel.delegate  = self
         panel.makeKeyAndOrderFront(nil)
         panel.reloadData()
-
-        // Download file to a named temp file
-        downloadTask = Task {
-            guard let presignedURL = AWSV4Signer.presignedURL(for: object.key, credentials: credentials) else { return }
-            do {
-                let (tmpURL, _) = try await URLSession.shared.download(from: presignedURL)
-                // Move to a stable path with the real filename so QL picks the right previewer
-                let dest = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("fiaxe_ql_\(object.name)")
-                try? FileManager.default.removeItem(at: dest)
-                try FileManager.default.moveItem(at: tmpURL, to: dest)
-
-                guard !Task.isCancelled else { return }
-                self.previewItem = PreviewItem(url: dest, title: object.name)
-                QLPreviewPanel.shared()?.reloadData()
-            } catch {
-                // ignore — panel stays empty if download fails
-            }
-        }
     }
 
     // MARK: - QLPreviewPanelDataSource
