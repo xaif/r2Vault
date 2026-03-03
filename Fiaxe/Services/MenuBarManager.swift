@@ -40,10 +40,6 @@ final class MenuBarManager: NSObject {
             rootView: MenuBarView()
                 .environment(viewModel)
         )
-        // Force opaque dark background — prevents the translucent bleed-through
-        hostingController.view.wantsLayer = true
-        hostingController.view.layer?.backgroundColor = NSColor(red: 0.13, green: 0.13, blue: 0.14, alpha: 1).cgColor
-
         popover.contentViewController = hostingController
     }
 

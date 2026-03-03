@@ -15,7 +15,6 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header
                 Divider()
-                    .overlay(Color.white.opacity(0.07))
                 dropZone
                     .padding(12)
 
@@ -37,8 +36,6 @@ struct MenuBarView: View {
             }
         }
         .frame(width: 300)
-        .background(Color(red: 0.13, green: 0.13, blue: 0.14))
-        .colorScheme(.dark)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.clipboardToastFileName != nil)
     }
 
@@ -145,11 +142,11 @@ struct MenuBarView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(isDropTargeted
                       ? Color.accentColor.opacity(0.12)
-                      : Color.white.opacity(0.05))
+                      : Color(NSColor.quaternaryLabelColor).opacity(0.4))
 
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(
-                    isDropTargeted ? Color.accentColor : Color.white.opacity(0.15),
+                    isDropTargeted ? Color.accentColor : Color(NSColor.separatorColor),
                     style: StrokeStyle(
                         lineWidth: isDropTargeted ? 2 : 1.5,
                         dash: isDropTargeted ? [] : [6, 4]
@@ -195,7 +192,7 @@ struct MenuBarView: View {
 
     private var uploadProgressSection: some View {
         VStack(spacing: 0) {
-            Divider().overlay(Color.white.opacity(0.07))
+            Divider()
 
             HStack {
                 HStack(spacing: 5) {
@@ -204,7 +201,7 @@ struct MenuBarView: View {
                         .frame(width: 14, height: 14)
                     Text("Uploading \(activeUploads.filter { $0.status == .uploading }.count) of \(activeUploads.count)…")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(.primary)
                 }
                 Spacer()
                 // Cancel all button
@@ -301,6 +298,7 @@ private struct MenuBarHistoryRow: View {
     @Environment(AppViewModel.self) private var viewModel
     @State private var isHovered = false
     @State private var copied = false
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -357,7 +355,7 @@ private struct MenuBarHistoryRow: View {
                         tint: .red,
                         help: "Delete from R2"
                     ) {
-                        viewModel.deleteHistoryItem(item)
+                        showDeleteConfirm = true
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -367,13 +365,25 @@ private struct MenuBarHistoryRow: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color.white.opacity(0.07) : Color.clear)
+                .fill(isHovered ? Color(NSColor.quaternaryLabelColor).opacity(0.6) : Color.clear)
                 .padding(.horizontal, 4)
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .animation(.easeOut(duration: 0.15), value: copied)
+        .confirmationDialog(
+            "Delete \"\(item.fileName)\"?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                viewModel.deleteHistoryItem(item)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove the file from R2 and cannot be undone.")
+        }
     }
 
     @ViewBuilder
@@ -439,20 +449,20 @@ private struct MenuBarUploadRow: View {
         HStack(spacing: 10) {
             Image(systemName: task.status == .pending ? "clock" : "arrow.up.circle")
                 .font(.system(size: 12))
-                .foregroundStyle(task.status == .pending ? Color.white.opacity(0.3) : Color.accentColor)
+                .foregroundStyle(task.status == .pending ? Color.secondary : Color.accentColor)
                 .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text(task.fileName)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer()
                     Text(task.status == .pending ? "Waiting" : "\(Int(task.progress * 100))%")
                         .font(.system(size: 10))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
 
@@ -463,7 +473,7 @@ private struct MenuBarUploadRow: View {
                         .frame(height: 3)
                 } else {
                     Rectangle()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(Color(NSColor.separatorColor))
                         .frame(height: 3)
                         .clipShape(Capsule())
                 }
