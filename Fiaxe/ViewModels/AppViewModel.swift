@@ -483,6 +483,7 @@ final class AppViewModel {
                 uploadTask.resultURL = publicURL
                 uploadTask.progress = 1.0
                 uploadTask.status = .completed
+                loadCurrentFolder()
 
                 let item = UploadItem(
                     fileName: uploadTask.fileName,
