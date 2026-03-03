@@ -25,12 +25,22 @@ final class FileUploadTask: Identifiable {
         case uploading
         case completed
         case failed
+        case cancelled
     }
+
+    /// The running upload task — held so it can be cancelled.
+    var uploadTask: Task<Void, Never>?
 
     init(fileURL: URL, fileName: String, fileSize: Int64) {
         self.id = UUID()
         self.fileURL = fileURL
         self.fileName = fileName
         self.fileSize = fileSize
+    }
+
+    func cancel() {
+        uploadTask?.cancel()
+        uploadTask = nil
+        status = .cancelled
     }
 }

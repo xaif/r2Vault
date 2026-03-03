@@ -472,9 +472,16 @@ final class AppViewModel {
 
         let pending = uploadTasks.filter { $0.status == .pending }
         await withTaskGroup(of: Void.self) { group in
-            for task in pending {
+            for uploadTask in pending {
+                // Create and store the task handle on MainActor before it runs,
+                // so the cancel button can reach it immediately.
+                let handle = Task {
+                    await self.uploadSingleFile(uploadTask, credentials: credentials)
+                }
+                await MainActor.run { uploadTask.uploadTask = handle }
                 group.addTask {
-                    await self.uploadSingleFile(task, credentials: credentials)
+                    await handle.value
+                    await MainActor.run { uploadTask.uploadTask = nil }
                 }
             }
         }
@@ -560,6 +567,10 @@ final class AppViewModel {
                 let body = String(data: result.responseBody, encoding: .utf8) ?? "Unknown error"
                 uploadTask.status = .failed
                 uploadTask.errorMessage = "HTTP \(result.httpStatusCode): \(body)"
+            }
+        } catch is CancellationError {
+            if uploadTask.status != .cancelled {
+                uploadTask.status = .cancelled
             }
         } catch {
             uploadTask.status = .failed

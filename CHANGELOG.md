@@ -2,6 +2,12 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.1.6] - 2026-03-03
+
+### Added
+- Cancel button on each upload row in the HUD — tap ✕ to cancel any pending or in-progress upload
+- Cancelled uploads show a "Cancelled" status instead of an error
+
 ## [v1.1.5] - 2025-03-03
 
 ### Added

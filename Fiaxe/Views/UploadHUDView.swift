@@ -188,15 +188,31 @@ private struct HUDTaskRow: View {
                         .font(.caption2)
                         .foregroundStyle(.red)
                         .lineLimit(1)
+                case .cancelled:
+                    Text("Cancelled")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             Spacer(minLength: 0)
 
-            Text(ByteCountFormatter.string(fromByteCount: task.fileSize, countStyle: .file))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            if task.status == .pending || task.status == .uploading {
+                Button {
+                    task.cancel()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.borderless)
+                .help("Cancel upload")
+            } else {
+                Text(ByteCountFormatter.string(fromByteCount: task.fileSize, countStyle: .file))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
@@ -208,6 +224,7 @@ private struct HUDTaskRow: View {
         case .uploading: return "arrow.up.circle"
         case .completed: return "checkmark.circle.fill"
         case .failed:    return "xmark.circle.fill"
+        case .cancelled: return "slash.circle"
         }
     }
 
@@ -217,6 +234,7 @@ private struct HUDTaskRow: View {
         case .uploading: return .accentColor
         case .completed: return .green
         case .failed:    return .red
+        case .cancelled: return .secondary
         }
     }
 }

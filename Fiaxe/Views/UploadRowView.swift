@@ -31,6 +31,17 @@ struct UploadRowView: View {
                     .buttonStyle(.borderless)
                     .help("Copy URL to clipboard")
                 }
+
+                if task.status == .pending || task.status == .uploading {
+                    Button {
+                        task.cancel()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Cancel upload")
+                }
             }
 
             switch task.status {
@@ -62,6 +73,11 @@ struct UploadRowView: View {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .lineLimit(2)
+
+            case .cancelled:
+                Text("Cancelled")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
@@ -73,6 +89,7 @@ struct UploadRowView: View {
         case .uploading: "arrow.up.circle"
         case .completed: "checkmark.circle.fill"
         case .failed:    "xmark.circle.fill"
+        case .cancelled: "slash.circle"
         }
     }
 
@@ -82,6 +99,7 @@ struct UploadRowView: View {
         case .uploading: .blue
         case .completed: .green
         case .failed:    .red
+        case .cancelled: .secondary
         }
     }
 }
