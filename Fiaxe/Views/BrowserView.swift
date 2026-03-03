@@ -387,6 +387,10 @@ struct BrowserView: View {
             .help("View Mode")
         }
 
+        if #available(macOS 26.0, *) {
+            ToolbarSpacer(.fixed)
+        }
+
         // Upload actions
         ToolbarItemGroup(placement: .primaryAction) {
             Menu {
@@ -399,6 +403,10 @@ struct BrowserView: View {
             }
             .disabled(!viewModel.hasCredentials)
             .help("Upload")
+        }
+
+        if #available(macOS 26.0, *) {
+            ToolbarSpacer(.fixed)
         }
 
         // Utility actions

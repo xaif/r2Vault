@@ -1,5 +1,16 @@
 import SwiftUI
 
+private extension View {
+    @ViewBuilder
+    func glassEffectIfAvailable(cornerRadius: CGFloat) -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+        } else {
+            self
+        }
+    }
+}
+
 /// Non-blocking floating upload progress panel shown in the bottom-right corner.
 /// Only visible when there are active, pending, or recently-completed uploads.
 struct UploadHUDView: View {
@@ -109,6 +120,7 @@ struct UploadHUDView: View {
             }
         }
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .glassEffectIfAvailable(cornerRadius: 12)
         .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 6)
         .frame(width: 280)
         .transition(.move(edge: .bottom).combined(with: .opacity))
