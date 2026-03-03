@@ -42,6 +42,9 @@ final class AppViewModel {
     var alertMessage: String?
     var showAlert = false
 
+    /// Set briefly after a successful upload to trigger "Link copied!" toast
+    var clipboardToastFileName: String? = nil
+
     // Update state
     enum UpdateStatus {
         case idle
@@ -563,6 +566,13 @@ final class AppViewModel {
                 )
                 historyStore.add(item)
                 copyToClipboard(publicURL.absoluteString)
+                clipboardToastFileName = uploadTask.fileName
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2.5))
+                    if clipboardToastFileName == uploadTask.fileName {
+                        clipboardToastFileName = nil
+                    }
+                }
             } else {
                 let body = String(data: result.responseBody, encoding: .utf8) ?? "Unknown error"
                 uploadTask.status = .failed
@@ -595,6 +605,29 @@ final class AppViewModel {
             } catch {
                 await MainActor.run { showError("Download failed: \(error.localizedDescription)") }
             }
+        }
+    }
+
+    /// Downloads a history item to the user's Downloads folder via a presigned URL.
+    func downloadHistoryItem(_ item: UploadItem) {
+        guard let credentials else { return }
+        guard let presigned = AWSV4Signer.presignedURL(for: item.r2Key, credentials: credentials) else { return }
+        let dest = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(item.fileName)
+        downloadToDestination(from: presigned, dest: dest)
+    }
+
+    /// Deletes a history item from R2 and removes it from local history.
+    func deleteHistoryItem(_ item: UploadItem) {
+        guard let credentials else { return }
+        // Remove from local history immediately
+        if let idx = historyStore.items.firstIndex(where: { $0.id == item.id }) {
+            historyStore.items.remove(at: idx)
+        }
+        // Delete from R2 in background
+        Task {
+            try? await R2BrowseService.deleteObject(credentials: credentials, key: item.r2Key)
+            loadCurrentFolder()
         }
     }
 
