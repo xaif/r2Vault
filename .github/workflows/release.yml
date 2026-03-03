@@ -43,6 +43,9 @@ jobs:
           DEVICE=$(hdiutil attach "$DMG_TMP" -readwrite -noverify -noautoopen | awk 'END{print $1}')
           MOUNTPOINT="/Volumes/$VOLNAME"
 
+          # Strip quarantine so Gatekeeper doesn't block the app on download
+          xattr -cr "$APP"
+
           cp -R "$APP" "$MOUNTPOINT/"
           ln -s /Applications "$MOUNTPOINT/Applications"
 
