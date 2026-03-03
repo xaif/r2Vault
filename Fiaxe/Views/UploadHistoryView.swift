@@ -11,7 +11,7 @@ struct UploadHistoryView: View {
                 Text("Completed uploads will appear here.")
             } actions: {
                 Button {
-                    viewModel.showFileImporter = true
+                    viewModel.presentFilePicker()
                 } label: {
                     Label("Upload Files…", systemImage: "plus.circle.fill")
                 }

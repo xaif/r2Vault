@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Finder-like R2 bucket browser with Icons / List / Gallery view modes,
 /// Finder-style toolbar, path bar, multi-select, and drag-and-drop upload.
@@ -236,7 +237,7 @@ struct BrowserView: View {
                     .font(.title3).fontWeight(.semibold).foregroundStyle(.secondary)
                 Text("Or click + in the toolbar")
                     .font(.subheadline).foregroundStyle(.tertiary)
-                Button { viewModel.showFileImporter = true } label: {
+                Button { viewModel.presentFilePicker() } label: {
                     Label("Select Files…", systemImage: "plus.circle.fill")
                         .padding(.horizontal, 14).padding(.vertical, 8)
                 }
@@ -398,7 +399,7 @@ struct BrowserView: View {
         // Upload actions
         ToolbarItemGroup(placement: .primaryAction) {
             Menu {
-                Button("Upload Files…") { viewModel.showFileImporter = true }
+                Button("Upload Files…") { viewModel.presentFilePicker() }
                 Button("Upload Folder…") { viewModel.showFolderImporter = true }
                 Divider()
                 Button("New Folder…") { newFolderName = ""; showNewFolderSheet = true }

@@ -43,17 +43,14 @@ struct ContentView: View {
                 selection = .bucket(first)
             }
         }
-        .fileImporter(
-            isPresented: $viewModel.showFileImporter,
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls): viewModel.handleSelectedFiles(urls)
-            case .failure(let error):
-                viewModel.alertMessage = error.localizedDescription
-                viewModel.showAlert = true
-            }
+        .alert("Error", isPresented: $viewModel.showAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let msg = viewModel.alertMessage { Text(msg) }
+        }
+        .sheet(isPresented: $viewModel.showUpdateSheet) {
+            UpdateSheetView()
+                .environment(viewModel)
         }
         .fileImporter(
             isPresented: $viewModel.showFolderImporter,
@@ -66,15 +63,6 @@ struct ContentView: View {
                 viewModel.alertMessage = error.localizedDescription
                 viewModel.showAlert = true
             }
-        }
-        .alert("Error", isPresented: $viewModel.showAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            if let msg = viewModel.alertMessage { Text(msg) }
-        }
-        .sheet(isPresented: $viewModel.showUpdateSheet) {
-            UpdateSheetView()
-                .environment(viewModel)
         }
     }
 

@@ -38,7 +38,6 @@ final class AppViewModel {
     var hasCredentials: Bool { !(credentials?.isEmpty ?? true) }
 
     // UI state
-    var showFileImporter = false
     var showFolderImporter = false
     var alertMessage: String?
     var showAlert = false
@@ -391,6 +390,8 @@ final class AppViewModel {
     // MARK: - File Selection
 
     func handleSelectedFiles(_ urls: [URL]) {
+        var tasks: [FileUploadTask] = []
+
         for url in urls {
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
@@ -399,21 +400,40 @@ final class AppViewModel {
             let fileName = resourceValues?.name ?? url.lastPathComponent
             let fileSize = Int64(resourceValues?.fileSize ?? 0)
 
+            // Save a security-scoped bookmark while we still have access,
+            // so uploadSingleFile can re-open the file later on a background task.
+            let bookmark = try? url.bookmarkData(options: [.withSecurityScope],
+                                                 includingResourceValuesForKeys: nil,
+                                                 relativeTo: nil)
+
             let task = FileUploadTask(fileURL: url, fileName: fileName, fileSize: fileSize)
-            // When browsing a folder, upload into that folder
+            task.fileBookmark = bookmark
             if !currentPrefix.isEmpty {
                 task.uploadKey = currentPrefix + fileName
             }
-            uploadTasks.append(task)
+            tasks.append(task)
         }
 
-        Task {
-            await uploadPendingTasks()
-        }
+        guard !tasks.isEmpty else { return }
+        uploadTasks.append(contentsOf: tasks)
+        Task { await uploadPendingTasks() }
     }
 
     func handleSelectedFolders(_ urls: [URL]) {
         handleDroppedURLs(urls)
+    }
+
+    @MainActor
+    func presentFilePicker() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.item]
+        panel.begin { [weak self] response in
+            guard response == .OK, let self else { return }
+            self.handleSelectedFiles(panel.urls)
+        }
     }
 
     // MARK: - Upload
@@ -440,6 +460,7 @@ final class AppViewModel {
 
         let fileURL = uploadTask.fileURL
 
+        // Re-establish access to the parent folder bookmark (folder uploads)
         var folderURL: URL?
         var folderAccessing = false
         if let bookmark = uploadTask.parentFolderBookmark {
@@ -454,10 +475,25 @@ final class AppViewModel {
         }
         defer { if folderAccessing { folderURL?.stopAccessingSecurityScopedResource() } }
 
-        let accessing = fileURL.startAccessingSecurityScopedResource()
-        defer { if accessing { fileURL.stopAccessingSecurityScopedResource() } }
+        // Re-establish access to the individual file via its bookmark (file picker uploads),
+        // or fall back to a direct security-scoped access call on the stored URL.
+        var resolvedFileURL = fileURL
+        var fileAccessing = false
+        if let bookmark = uploadTask.fileBookmark {
+            var isStale = false
+            if let resolved = try? URL(resolvingBookmarkData: bookmark,
+                                       options: [.withSecurityScope],
+                                       relativeTo: nil,
+                                       bookmarkDataIsStale: &isStale) {
+                resolvedFileURL = resolved
+                fileAccessing = resolved.startAccessingSecurityScopedResource()
+            }
+        } else {
+            fileAccessing = fileURL.startAccessingSecurityScopedResource()
+        }
+        defer { if fileAccessing { resolvedFileURL.stopAccessingSecurityScopedResource() } }
 
-        let contentType = mimeType(for: fileURL)
+        let contentType = mimeType(for: resolvedFileURL)
         // Use explicit upload key (folder-aware) or fall back to random-prefix key
         let key: String
         if let explicitKey = uploadTask.uploadKey, !explicitKey.isEmpty {
@@ -469,7 +505,7 @@ final class AppViewModel {
 
         do {
             let result = try await R2UploadService.upload(
-                fileURL: fileURL,
+                fileURL: resolvedFileURL,
                 credentials: credentials,
                 key: key,
                 contentType: contentType,

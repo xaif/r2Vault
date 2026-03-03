@@ -11,7 +11,7 @@ struct UploadQueueView: View {
                 Text("Click + to select files and upload them to R2.")
             } actions: {
                 Button {
-                    viewModel.showFileImporter = true
+                    viewModel.presentFilePicker()
                 } label: {
                     Label("Upload Files…", systemImage: "plus.circle.fill")
                 }

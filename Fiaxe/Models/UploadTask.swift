@@ -17,6 +17,8 @@ final class FileUploadTask: Identifiable {
     var uploadKey: String?
     /// Security-scoped bookmark for a parent folder (used when uploading folders).
     var parentFolderBookmark: Data?
+    /// Security-scoped bookmark for the file itself (used when uploading individual files via file picker).
+    var fileBookmark: Data?
 
     enum Status: Sendable {
         case pending
