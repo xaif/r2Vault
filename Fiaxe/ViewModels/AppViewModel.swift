@@ -293,7 +293,11 @@ final class AppViewModel {
     func deleteObject(_ object: R2Object) async {
         guard let credentials else { return }
         do {
-            try await R2BrowseService.deleteObject(credentials: credentials, key: object.key)
+            if object.isFolder {
+                try await deleteRecursive(prefix: object.key, credentials: credentials)
+            } else {
+                try await R2BrowseService.deleteObject(credentials: credentials, key: object.key)
+            }
             loadCurrentFolder()
         } catch {
             showError("Failed to delete: \(error.localizedDescription)")
@@ -307,11 +311,33 @@ final class AppViewModel {
         await withTaskGroup(of: Void.self) { group in
             for object in toDelete {
                 group.addTask {
-                    try? await R2BrowseService.deleteObject(credentials: credentials, key: object.key)
+                    do {
+                        if object.isFolder {
+                            try await self.deleteRecursive(prefix: object.key, credentials: credentials)
+                        } else {
+                            try? await R2BrowseService.deleteObject(credentials: credentials, key: object.key)
+                        }
+                    } catch {
+                        // Individual folder delete errors are silently ignored to not block other deletions
+                    }
                 }
             }
         }
         loadCurrentFolder()
+    }
+
+    /// Recursively deletes all objects under `prefix` (including the folder placeholder itself).
+    private func deleteRecursive(prefix: String, credentials: R2Credentials) async throws {
+        let keys = try await R2BrowseService.listAllKeys(credentials: credentials, prefix: prefix)
+        // Delete all found keys concurrently
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for key in keys {
+                group.addTask {
+                    try await R2BrowseService.deleteObject(credentials: credentials, key: key)
+                }
+            }
+            try await group.waitForAll()
+        }
     }
 
     func selectAll() {

@@ -51,7 +51,7 @@ struct BrowserView: View {
             Button("Delete", role: .destructive) { Task { await viewModel.deleteSelected() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will permanently remove the selected items from R2 and cannot be undone.")
+            Text("This will permanently remove the selected items from R2 and cannot be undone. Folders will be deleted recursively including all their contents.")
         }
     }
 
@@ -354,7 +354,7 @@ struct BrowserView: View {
         }
         Divider()
         Button(role: .destructive) { Task { await viewModel.deleteObject(item) } } label: {
-            Label("Delete", systemImage: "trash")
+            Label(item.isFolder ? "Delete Folder & Contents" : "Delete", systemImage: "trash")
         }
     }
 

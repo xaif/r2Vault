@@ -111,6 +111,49 @@ nonisolated enum R2BrowseService {
 
     // MARK: - Delete Object
 
+    /// Lists every object key that starts with `prefix` (no delimiter — fully recursive).
+    static func listAllKeys(credentials: R2Credentials, prefix: String) async throws -> [String] {
+        var allKeys: [String] = []
+        var continuationToken: String? = nil
+
+        repeat {
+            let baseURL = credentials.endpoint
+                .appendingPathComponent(credentials.bucketName)
+
+            var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+            var queryItems: [URLQueryItem] = [
+                URLQueryItem(name: "list-type", value: "2"),
+                URLQueryItem(name: "prefix", value: prefix),
+            ]
+            if let token = continuationToken {
+                queryItems.append(URLQueryItem(name: "continuation-token", value: token))
+            }
+            comps.queryItems = queryItems
+
+            guard let url = comps.url else { throw URLError(.badURL) }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            let signed = AWSV4Signer.sign(request: request, credentials: credentials,
+                                          payloadHash: AWSV4Signer.sha256Hex(""))
+
+            let (data, response) = try await URLSession.shared.data(for: signed)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let body = String(data: data, encoding: .utf8) ?? ""
+                throw R2BrowseError.httpError(code, body)
+            }
+
+            // Parse keys + truncation from the flat (no-delimiter) list
+            let parser = FlatListParser()
+            let result = try parser.parse(data: data)
+            allKeys.append(contentsOf: result.keys)
+            continuationToken = result.isTruncated ? result.nextContinuationToken : nil
+        } while continuationToken != nil
+
+        return allKeys
+    }
+
     // MARK: - URL Builder
 
     /// Builds a correctly percent-encoded URL for a bucket object key, preserving trailing slashes.
@@ -270,6 +313,62 @@ private final class ListBucketResultParser: NSObject, XMLParserDelegate, @unchec
             break
         }
 
+        currentElement = ""
+        currentText = ""
+    }
+}
+
+// MARK: - Flat List Parser (no delimiter — for recursive enumeration)
+
+private struct FlatListResult {
+    var keys: [String]
+    var isTruncated: Bool
+    var nextContinuationToken: String?
+}
+
+private final class FlatListParser: NSObject, XMLParserDelegate, @unchecked Sendable {
+    private var keys: [String] = []
+    private var isTruncated = false
+    private var nextContinuationToken: String?
+    private var currentElement = ""
+    private var currentText = ""
+    private var inContents = false
+
+    func parse(data: Data) throws -> FlatListResult {
+        let parser = XMLParser(data: data)
+        parser.delegate = self
+        guard parser.parse() else {
+            throw R2BrowseError.parseError(parser.parserError?.localizedDescription ?? "Parse error")
+        }
+        return FlatListResult(keys: keys, isTruncated: isTruncated, nextContinuationToken: nextContinuationToken)
+    }
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
+                qualifiedName qName: String?, attributes: [String: String] = [:]) {
+        currentElement = elementName
+        currentText = ""
+        if elementName == "Contents" { inContents = true }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        currentText += string
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,
+                qualifiedName qName: String?) {
+        let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch elementName {
+        case "Contents":
+            inContents = false
+        case "Key":
+            if inContents { keys.append(text) }
+        case "IsTruncated":
+            isTruncated = text.lowercased() == "true"
+        case "NextContinuationToken":
+            nextContinuationToken = text
+        default:
+            break
+        }
         currentElement = ""
         currentText = ""
     }
