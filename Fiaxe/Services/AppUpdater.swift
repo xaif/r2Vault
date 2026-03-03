@@ -191,13 +191,15 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
                 let pid = ProcessInfo.processInfo.processIdentifier
                 let escapedTemp = self.shellEscape(tempApp.path)
                 let escapedDest = self.shellEscape(destApp.path)
+                let escapedDMG = self.shellEscape(dmg.path)
                 let script = """
                 while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done
                 /bin/rm -rf \(escapedDest)
                 /usr/bin/ditto \(escapedTemp) \(escapedDest)
                 /usr/bin/xattr -dr com.apple.quarantine \(escapedDest) 2>/dev/null
-                open \(escapedDest)
                 /bin/rm -rf \(escapedTemp)
+                /bin/rm -f \(escapedDMG)
+                open \(escapedDest)
                 """
                 self.log("Launching post-quit install script.")
                 Process.launchedProcess(launchPath: "/bin/sh", arguments: ["-c", script])
