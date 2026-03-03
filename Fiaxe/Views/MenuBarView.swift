@@ -59,7 +59,7 @@ struct MenuBarView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .glassEffect(.regular.tint(.green), in: .rect(cornerRadius: 10))
+        .modifier(GlassToastModifier())
         .padding(.horizontal, 10)
         .padding(.bottom, 10)
     }
@@ -81,9 +81,9 @@ struct MenuBarView: View {
 
             Spacer()
 
-            // Settings menu — bucket switching + open main window
+            // Settings menu — bucket switching + open main window + quit
             Menu {
-                // Bucket section (always shown if credentials exist)
+                // Bucket section
                 if !viewModel.credentialsList.isEmpty {
                     if viewModel.credentialsList.count > 1 {
                         Section("Switch Bucket") {
@@ -114,6 +114,12 @@ struct MenuBarView: View {
                     Label("Open R2 Vault", systemImage: "arrow.up.right.square")
                 }
 
+                Button {
+                    openSettings()
+                } label: {
+                    Label("Settings…", systemImage: "gear")
+                }
+
                 Divider()
 
                 Button(role: .destructive) {
@@ -126,7 +132,7 @@ struct MenuBarView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 7))
+                    .modifier(GlassGearModifier())
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -140,15 +146,12 @@ struct MenuBarView: View {
 
     private var dropZone: some View {
         ZStack {
-            // Glass background — tinted blue when targeted
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.clear)
-                .glassEffect(
-                    isDropTargeted ? .regular.tint(.accentColor) : .regular,
-                    in: .rect(cornerRadius: 10)
-                )
+                .fill(isDropTargeted
+                      ? Color.accentColor.opacity(0.12)
+                      : Color(NSColor.quaternaryLabelColor).opacity(0.4))
+                .modifier(GlassDropZoneModifier(isTargeted: isDropTargeted))
 
-            // Dashed border when idle
             if !isDropTargeted {
                 RoundedRectangle(cornerRadius: 10)
                     .strokeBorder(
@@ -208,14 +211,13 @@ struct MenuBarView: View {
                         .foregroundStyle(.primary)
                 }
                 Spacer()
-                // Cancel all button
                 Button {
                     activeUploads.forEach { $0.cancel() }
                 } label: {
                     Text("Cancel All")
                         .font(.system(size: 10))
                 }
-                .buttonStyle(.glass)
+                .modifier(GlassButtonModifier())
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -248,7 +250,7 @@ struct MenuBarView: View {
                     Image(systemName: "arrow.up.right.square")
                         .font(.system(size: 12))
                 }
-                .buttonStyle(.glass)
+                .modifier(GlassButtonModifier())
                 .help("Open main window")
             }
             .padding(.horizontal, 14)
@@ -269,7 +271,6 @@ struct MenuBarView: View {
 
     // MARK: - Helpers
 
-    /// Opens NSOpenPanel imperatively so the menu bar popover doesn't lose focus and dismiss.
     private func openFilePicker() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -277,7 +278,6 @@ struct MenuBarView: View {
         panel.allowsMultipleSelection = true
         panel.allowedContentTypes = [.item]
         panel.title = "Select Files to Upload"
-        // Make sure the panel becomes key window without closing the popover
         NSApp.activate(ignoringOtherApps: true)
         panel.begin { response in
             guard response == .OK else { return }
@@ -289,6 +289,63 @@ struct MenuBarView: View {
         NSApp.activate(ignoringOtherApps: true)
         if let window = NSApp.windows.first(where: { !$0.className.contains("StatusBar") && $0.canBecomeMain }) {
             window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    private func openSettings() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+}
+
+// MARK: - Availability-gated Glass Modifiers
+
+/// Glass toast background — green tint on macOS 26+, solid green fill on older.
+private struct GlassToastModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular.tint(.green), in: .rect(cornerRadius: 10))
+        } else {
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.green.opacity(0.15))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.green.opacity(0.3), lineWidth: 1))
+                )
+        }
+    }
+}
+
+/// Glass gear button — interactive glass on macOS 26+, subtle fill on older.
+private struct GlassGearModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: .rect(cornerRadius: 7))
+        } else {
+            content.background(RoundedRectangle(cornerRadius: 7).fill(Color(NSColor.quaternaryLabelColor).opacity(0.5)))
+        }
+    }
+}
+
+/// Glass drop zone — tinted glass on macOS 26+, plain fill on older.
+private struct GlassDropZoneModifier: ViewModifier {
+    let isTargeted: Bool
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(isTargeted ? .regular.tint(.accentColor) : .regular, in: .rect(cornerRadius: 10))
+        } else {
+            content // fill already applied on the RoundedRectangle
+        }
+    }
+}
+
+/// Glass button style — .glass on macOS 26+, .borderless on older.
+private struct GlassButtonModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.buttonStyle(.glass)
+        } else {
+            content.buttonStyle(.borderless)
         }
     }
 }
@@ -304,12 +361,12 @@ private struct MenuBarHistoryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            // File type icon badge — glass with tint
+            // File type icon badge
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.clear)
+                    .fill(iconBackground)
                     .frame(width: 30, height: 30)
-                    .glassEffect(.regular.tint(iconColor), in: .rect(cornerRadius: 6))
+                    .modifier(GlassIconBadgeModifier(color: iconColor))
                 Image(systemName: fileIcon)
                     .font(.system(size: 13))
                     .foregroundStyle(iconColor)
@@ -330,7 +387,6 @@ private struct MenuBarHistoryRow: View {
             // Action buttons — visible on hover
             if isHovered {
                 HStack(spacing: 4) {
-                    // Copy link
                     Button {
                         viewModel.copyToClipboard(item.publicURL.absoluteString)
                         withAnimation { copied = true }
@@ -343,10 +399,9 @@ private struct MenuBarHistoryRow: View {
                             .foregroundStyle(copied ? .green : .secondary)
                             .frame(width: 24, height: 24)
                     }
-                    .buttonStyle(.glass)
+                    .modifier(GlassButtonModifier())
                     .help("Copy URL")
 
-                    // Download
                     Button {
                         viewModel.downloadHistoryItem(item)
                     } label: {
@@ -354,10 +409,9 @@ private struct MenuBarHistoryRow: View {
                             .font(.system(size: 11, weight: .medium))
                             .frame(width: 24, height: 24)
                     }
-                    .buttonStyle(.glass)
+                    .modifier(GlassButtonModifier())
                     .help("Download to Downloads folder")
 
-                    // Delete
                     Button {
                         showDeleteConfirm = true
                     } label: {
@@ -366,7 +420,7 @@ private struct MenuBarHistoryRow: View {
                             .foregroundStyle(.red)
                             .frame(width: 24, height: 24)
                     }
-                    .buttonStyle(.glass)
+                    .modifier(GlassButtonModifier())
                     .help("Delete from R2")
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -410,6 +464,18 @@ private struct MenuBarHistoryRow: View {
         }
     }
 
+    private var iconBackground: Color {
+        let ext = (item.fileName as NSString).pathExtension.lowercased()
+        switch ext {
+        case "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tiff", "svg": return Color.purple.opacity(0.15)
+        case "mp4", "mov", "avi", "mkv", "webm", "m4v": return Color.pink.opacity(0.15)
+        case "mp3", "m4a", "wav", "aac", "flac", "ogg": return Color.orange.opacity(0.15)
+        case "pdf": return Color.red.opacity(0.15)
+        case "zip", "tar", "gz", "bz2", "7z", "rar": return Color.brown.opacity(0.15)
+        default: return Color.blue.opacity(0.12)
+        }
+    }
+
     private var iconColor: Color {
         let ext = (item.fileName as NSString).pathExtension.lowercased()
         switch ext {
@@ -419,6 +485,18 @@ private struct MenuBarHistoryRow: View {
         case "pdf": return .red
         case "zip", "tar", "gz", "bz2", "7z", "rar": return Color(NSColor.brown)
         default: return .blue
+        }
+    }
+}
+
+/// Glass tinted icon badge — glass tint on macOS 26+, plain fill on older.
+private struct GlassIconBadgeModifier: ViewModifier {
+    let color: Color
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular.tint(color), in: .rect(cornerRadius: 6))
+        } else {
+            content // plain fill already set on the shape
         }
     }
 }
