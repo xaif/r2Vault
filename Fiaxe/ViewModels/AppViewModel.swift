@@ -241,6 +241,7 @@ final class AppViewModel {
         backStack.append(currentPrefix)
         forwardStack.removeAll()
         currentPrefix = object.key
+        selectedObjectIDs = []
         loadCurrentFolder()
     }
 

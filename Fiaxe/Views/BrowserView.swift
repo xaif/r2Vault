@@ -140,16 +140,19 @@ struct BrowserView: View {
                         credentials: viewModel.credentials ?? .empty,
                         isSelected: viewModel.selectedObjectIDs.contains(item.id)
                     )
-                        .onTapGesture(count: 2) {
-                            if item.isFolder {
-                                viewModel.navigateToFolder(item)
-                            } else {
-                                QuickLookCoordinator.shared.preview(
-                                    item,
-                                    credentials: viewModel.credentials ?? .empty
-                                )
-                            }
+                    .onTapGesture(count: 2) {
+                        if item.isFolder {
+                            viewModel.navigateToFolder(item)
+                        } else {
+                            QuickLookCoordinator.shared.preview(
+                                item,
+                                credentials: viewModel.credentials ?? .empty
+                            )
                         }
+                    }
+                    .onTapGesture(count: 1) {
+                        toggleSelection(item)
+                    }
                     .contextMenu { rowContextMenu(for: item) }
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
@@ -176,13 +179,14 @@ struct BrowserView: View {
                     R2ObjectRow(
                         object: item,
                         credentials: viewModel.credentials ?? .empty,
-                        isSelected: false,
+                        isSelected: viewModel.selectedObjectIDs.contains(item.id),
                         onNavigate: { viewModel.navigateToFolder($0) },
                         onCopyURL: { viewModel.copyToClipboard($0) },
                         onPreview: { QuickLookCoordinator.shared.preview($0, credentials: viewModel.credentials ?? .empty) },
                         onDownload: { viewModel.downloadToDestination(from: $0, dest: $1) },
                         onDelete: { item in Task { await viewModel.deleteObject(item) } }
                     )
+                    .onTapGesture { toggleSelection(item) }
                     .contextMenu { rowContextMenu(for: item) }
                 }
             }
