@@ -18,46 +18,6 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
 
-      - name: Create self-signed certificate and keychain
-        run: |
-          # Create a temporary keychain
-          security create-keychain -p "temp_pass" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "temp_pass" build.keychain
-          security set-keychain-settings -t 3600 -u build.keychain
-
-          # Generate a self-signed certificate for code signing
-          cat > /tmp/cert.cfg <<EOF
-          [ req ]
-          default_bits       = 2048
-          prompt             = no
-          default_md         = sha256
-          distinguished_name = dn
-          x509_extensions    = v3_ca
-          [ dn ]
-          CN = R2Vault Self-Signed
-          [ v3_ca ]
-          subjectKeyIdentifier = hash
-          authorityKeyIdentifier = keyid:always,issuer
-          basicConstraints = critical, CA:true
-          keyUsage = critical, digitalSignature, keyCertSign
-          EOF
-
-          openssl req -x509 -newkey rsa:2048 -keyout /tmp/cert.key \
-            -out /tmp/cert.crt -days 3650 -nodes -config /tmp/cert.cfg
-
-          openssl pkcs12 -export -out /tmp/cert.p12 \
-            -inkey /tmp/cert.key -in /tmp/cert.crt -passout pass:temp_pass
-
-          security import /tmp/cert.p12 -k build.keychain \
-            -P temp_pass -T /usr/bin/codesign
-
-          security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
-            -s -k "temp_pass" build.keychain
-
-          echo "CERT_NAME=R2Vault Self-Signed" >> $GITHUB_ENV
-
       - name: Build
         run: |
           xcodebuild \
@@ -74,30 +34,24 @@ jobs:
       - name: Create DMG
         run: |
           APP=$(find build/Build/Products/Release -name "*.app" -maxdepth 1 | head -1)
+          APP_NAME=$(basename "$APP")
           DMG_TMP="/tmp/r2vault_tmp.dmg"
           DMG_OUT="/tmp/r2Vault.dmg"
           VOLNAME="R2 Vault"
 
-          # Sign with self-signed cert so macOS shows "unidentified developer"
-          # instead of "damaged" — allows users to bypass via right-click Open
-          security unlock-keychain -p "temp_pass" build.keychain
-          codesign --force --deep --sign "R2Vault Self-Signed" \
-            --keychain build.keychain "$APP"
+          # Strip any xattrs from the built app
           xattr -cr "$APP"
 
+          # Create writable DMG
           hdiutil create -size 80m -fs HFS+ -volname "$VOLNAME" "$DMG_TMP" -ov -quiet
-
           DEVICE=$(hdiutil attach "$DMG_TMP" -readwrite -noverify -noautoopen | awk 'END{print $1}')
           MOUNTPOINT="/Volumes/$VOLNAME"
 
           cp -R "$APP" "$MOUNTPOINT/"
           ln -s /Applications "$MOUNTPOINT/Applications"
-
-          # Copy volume icon from the app
           cp "$APP/Contents/Resources/AppIcon.icns" "$MOUNTPOINT/.VolumeIcon.icns"
 
-          # Set icon positions via AppleScript
-          APP_NAME=$(basename "$APP")
+          # Set Finder window layout
           osascript <<APPLESCRIPT
           tell application "Finder"
             tell disk "$VOLNAME"
@@ -135,5 +89,16 @@ jobs:
             --title "${{ github.ref_name }}" \
             --notes "## What's New
 
-          See the full changelog in the repository." \
+          See the full changelog in the repository.
+
+          ## Installation
+
+          Since R2 Vault is not yet notarized with Apple, macOS may show a \"damaged\" warning.
+          To open it, run this command in Terminal after copying the app to Applications:
+
+          \`\`\`
+          xattr -dr com.apple.quarantine /Applications/R2Vault.app
+          \`\`\`
+
+          Then open the app normally." \
             "${{ env.DMG_PATH }}"
