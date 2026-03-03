@@ -89,22 +89,9 @@ jobs:
           if [ -z "$NOTES" ]; then
             NOTES="See CHANGELOG.md for details."
           fi
-          # Append installation note
-          NOTES="${NOTES}
-
-          ---
-
-          ## Installation
-
-          Since R2 Vault is not notarized with Apple, macOS may show a \"damaged\" warning.
-          Run this in Terminal after copying the app to Applications:
-
-          \`\`\`
-          xattr -dr com.apple.quarantine /Applications/R2Vault.app
-          \`\`\`"
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-          echo "$NOTES" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          # Write notes to a file to avoid shell quoting issues with special characters
+          printf '%s\n' "$NOTES" > /tmp/release_notes.md
+          printf '\n---\n\n## Installation\n\nSince R2 Vault is not notarized with Apple, macOS may show a "damaged" warning.\nRun this in Terminal after copying the app to Applications:\n\n```\nxattr -dr com.apple.quarantine /Applications/R2Vault.app\n```\n' >> /tmp/release_notes.md
 
       - name: Publish Release
         env:
@@ -112,5 +99,5 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
-            --notes "${{ env.RELEASE_NOTES }}" \
+            --notes-file /tmp/release_notes.md \
             "${{ env.DMG_PATH }}"
