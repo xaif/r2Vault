@@ -2,7 +2,7 @@
 
 All notable changes to R2 Vault are documented here.
 
-## [v1.1.7] - 2026-03-03
+## [v1.2.0] - 2026-03-03
 
 ### Added
 - Menu bar widget — upload files by dropping them directly onto the menu bar icon
