@@ -9,6 +9,7 @@ struct BrowserView: View {
     @State private var newFolderName = ""
     @State private var isDropTargeted = false
     @State private var showDeleteConfirm = false
+    @State private var pendingDeleteItem: R2Object? = nil
 
     var body: some View {
         @Bindable var vm = viewModel
@@ -52,6 +53,27 @@ struct BrowserView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will permanently remove the selected items from R2 and cannot be undone. Folders will be deleted recursively including all their contents.")
+        }
+        .confirmationDialog(
+            pendingDeleteItem.map { $0.isFolder ? "Delete \"\($0.name)\" and all its contents?" : "Delete \"\($0.name)\"?" } ?? "",
+            isPresented: Binding(get: { pendingDeleteItem != nil }, set: { if !$0 { pendingDeleteItem = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(pendingDeleteItem?.isFolder == true ? "Delete Folder & Contents" : "Delete", role: .destructive) {
+                if let item = pendingDeleteItem {
+                    Task { await viewModel.deleteObject(item) }
+                    pendingDeleteItem = nil
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingDeleteItem = nil }
+        } message: {
+            if let item = pendingDeleteItem {
+                if item.isFolder {
+                    Text("This will permanently delete the folder and all files inside it from R2. This cannot be undone.")
+                } else {
+                    Text("This will permanently remove the file from R2. This cannot be undone.")
+                }
+            }
         }
     }
 
@@ -353,7 +375,7 @@ struct BrowserView: View {
             Label("Select", systemImage: "checkmark.circle")
         }
         Divider()
-        Button(role: .destructive) { Task { await viewModel.deleteObject(item) } } label: {
+        Button(role: .destructive) { pendingDeleteItem = item } label: {
             Label(item.isFolder ? "Delete Folder & Contents" : "Delete", systemImage: "trash")
         }
     }
