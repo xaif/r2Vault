@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project Fiaxe.xcodeproj \
+            -scheme Fiaxe \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
+
+      - name: Create DMG
+        run: |
+          APP=$(find build/Build/Products/Release -name "*.app" -maxdepth 1 | head -1)
+          DMG_TMP="/tmp/r2vault_tmp.dmg"
+          DMG_OUT="/tmp/r2Vault.dmg"
+          VOLNAME="R2 Vault"
+
+          hdiutil create -size 80m -fs HFS+ -volname "$VOLNAME" "$DMG_TMP" -ov -quiet
+
+          DEVICE=$(hdiutil attach "$DMG_TMP" -readwrite -noverify -noautoopen | awk 'END{print $1}')
+          MOUNTPOINT="/Volumes/$VOLNAME"
+
+          cp -R "$APP" "$MOUNTPOINT/"
+          ln -s /Applications "$MOUNTPOINT/Applications"
+
+          # Copy volume icon from the app
+          cp "$APP/Contents/Resources/AppIcon.icns" "$MOUNTPOINT/.VolumeIcon.icns"
+
+          # Set icon positions via AppleScript
+          APP_NAME=$(basename "$APP")
+          osascript <<APPLESCRIPT
+          tell application "Finder"
+            tell disk "$VOLNAME"
+              open
+              set current view of container window to icon view
+              set toolbar visible of container window to false
+              set statusbar visible of container window to false
+              set bounds of container window to {400, 200, 900, 520}
+              set theViewOptions to icon view options of container window
+              set arrangement of theViewOptions to not arranged
+              set icon size of theViewOptions to 128
+              set position of item "$APP_NAME" of container window to {150, 160}
+              set position of item "Applications" of container window to {370, 160}
+              close
+              open
+              update without registering applications
+              delay 2
+              close
+            end tell
+          end tell
+          APPLESCRIPT
+
+          sync
+          hdiutil detach "$DEVICE" -quiet
+          hdiutil convert "$DMG_TMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_OUT" -ov -quiet
+          rm -f "$DMG_TMP"
+
+          echo "DMG_PATH=$DMG_OUT" >> $GITHUB_ENV
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: |
+            ## What's New
+
+            See the full changelog in the repository.
+          files: ${{ env.DMG_PATH }}
