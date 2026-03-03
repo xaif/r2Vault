@@ -2,6 +2,16 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.2] - 2026-03-04
+
+### Added
+- App now runs exclusively in the menu bar — no Dock icon, no app switcher presence
+- Closing the main window no longer quits the app; it continues running in the background
+- Quit R2 Vault option added to the gear menu in the menu bar popover
+- Liquid Glass effects applied to drop zone, file type badges, action buttons, and toast notifications
+- Menu bar popover now adapts to system light/dark mode automatically
+- Delete confirmation dialog before removing files from the menu bar recent uploads list
+
 ## [v1.2.1] - 2026-03-03
 
 ### Fixed
