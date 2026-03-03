@@ -113,6 +113,14 @@ struct MenuBarView: View {
                 } label: {
                     Label("Open R2 Vault", systemImage: "arrow.up.right.square")
                 }
+
+                Divider()
+
+                Button(role: .destructive) {
+                    NSApp.terminate(nil)
+                } label: {
+                    Label("Quit R2 Vault", systemImage: "power")
+                }
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
