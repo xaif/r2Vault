@@ -1,9 +1,10 @@
 import SwiftUI
+import AppKit
 
 @main
 struct R2VaultApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var viewModel = AppViewModel()
-    // Held as a stored property so it lives for the app's lifetime
     @State private var menuBarManager: MenuBarManager?
 
     var body: some Scene {
@@ -30,5 +31,16 @@ struct R2VaultApp: App {
             SettingsView()
                 .environment(viewModel)
         }
+    }
+}
+
+// MARK: - App Delegate
+
+/// Prevents the app from quitting when the main window is closed.
+/// Combined with LSUIElement = YES in Info.plist, the app lives only
+/// in the menu bar and never appears in the Dock or app switcher.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
     }
 }
