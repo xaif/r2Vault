@@ -18,6 +18,46 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
 
+      - name: Create self-signed certificate and keychain
+        run: |
+          # Create a temporary keychain
+          security create-keychain -p "temp_pass" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "temp_pass" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+          # Generate a self-signed certificate for code signing
+          cat > /tmp/cert.cfg <<EOF
+          [ req ]
+          default_bits       = 2048
+          prompt             = no
+          default_md         = sha256
+          distinguished_name = dn
+          x509_extensions    = v3_ca
+          [ dn ]
+          CN = R2Vault Self-Signed
+          [ v3_ca ]
+          subjectKeyIdentifier = hash
+          authorityKeyIdentifier = keyid:always,issuer
+          basicConstraints = critical, CA:true
+          keyUsage = critical, digitalSignature, keyCertSign
+          EOF
+
+          openssl req -x509 -newkey rsa:2048 -keyout /tmp/cert.key \
+            -out /tmp/cert.crt -days 3650 -nodes -config /tmp/cert.cfg
+
+          openssl pkcs12 -export -out /tmp/cert.p12 \
+            -inkey /tmp/cert.key -in /tmp/cert.crt -passout pass:temp_pass
+
+          security import /tmp/cert.p12 -k build.keychain \
+            -P temp_pass -T /usr/bin/codesign
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "temp_pass" build.keychain
+
+          echo "CERT_NAME=R2Vault Self-Signed" >> $GITHUB_ENV
+
       - name: Build
         run: |
           xcodebuild \
@@ -25,9 +65,9 @@ jobs:
             -scheme Fiaxe \
             -configuration Release \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="R2Vault Self-Signed" \
+            CODE_SIGNING_REQUIRED=YES \
+            OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
             MACOSX_DEPLOYMENT_TARGET=15.0 \
             clean build
 
@@ -38,13 +78,15 @@ jobs:
           DMG_OUT="/tmp/r2Vault.dmg"
           VOLNAME="R2 Vault"
 
+          # Re-sign with self-signed cert and strip quarantine
+          codesign --force --deep --sign "R2Vault Self-Signed" \
+            --keychain build.keychain "$APP"
+          xattr -cr "$APP"
+
           hdiutil create -size 80m -fs HFS+ -volname "$VOLNAME" "$DMG_TMP" -ov -quiet
 
           DEVICE=$(hdiutil attach "$DMG_TMP" -readwrite -noverify -noautoopen | awk 'END{print $1}')
           MOUNTPOINT="/Volumes/$VOLNAME"
-
-          # Strip quarantine so Gatekeeper doesn't block the app on download
-          xattr -cr "$APP"
 
           cp -R "$APP" "$MOUNTPOINT/"
           ln -s /Applications "$MOUNTPOINT/Applications"
