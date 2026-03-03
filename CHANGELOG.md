@@ -2,6 +2,15 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.1.7] - 2026-03-03
+
+### Added
+- Menu bar widget — upload files by dropping them directly onto the menu bar icon
+- Live upload progress in the menu bar popover with per-file progress bars and cancel buttons
+- Recent uploads list in the menu bar (25 most recent, newest first) with copy link, download, and delete actions
+- Auto-copy public URL to clipboard after every upload, with a "Link copied!" toast notification
+- Bucket switcher moved into the gear settings menu — cleaner header, less clutter
+
 ## [v1.1.6] - 2026-03-03
 
 ### Added
