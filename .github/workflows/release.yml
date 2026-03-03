@@ -80,8 +80,9 @@ jobs:
 
           # Sign with self-signed cert so macOS shows "unidentified developer"
           # instead of "damaged" — allows users to bypass via right-click Open
+          security unlock-keychain -p "temp_pass" build.keychain
           codesign --force --deep --sign "R2Vault Self-Signed" \
-            --keychain ~/Library/Keychains/build.keychain-db "$APP"
+            --keychain build.keychain "$APP"
           xattr -cr "$APP"
 
           hdiutil create -size 80m -fs HFS+ -volname "$VOLNAME" "$DMG_TMP" -ov -quiet
