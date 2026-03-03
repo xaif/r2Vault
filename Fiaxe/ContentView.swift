@@ -72,6 +72,10 @@ struct ContentView: View {
         } message: {
             if let msg = viewModel.alertMessage { Text(msg) }
         }
+        .sheet(isPresented: $viewModel.showUpdateSheet) {
+            UpdateSheetView()
+                .environment(viewModel)
+        }
     }
 
     // MARK: - Sidebar

@@ -57,7 +57,7 @@ final class AppViewModel {
         }
     }
     var updateStatus: UpdateStatus = .idle
-    var updaterState: AppUpdater.State = .idle
+    var showUpdateSheet = false
 
     // MARK: - Browser state
 
@@ -128,9 +128,6 @@ final class AppViewModel {
     init() {
         loadCredentials()
         checkForUpdates()
-        AppUpdater.shared.onStateChange = { [self] in
-            updaterState = AppUpdater.shared.state
-        }
     }
 
     // MARK: - Credentials
@@ -528,18 +525,24 @@ final class AppViewModel {
 
     // MARK: - Updates
 
-    func checkForUpdates() {
+    /// - Parameter userInitiated: Pass `true` when triggered by the user (e.g. menu item).
+    ///   Shows the sheet even when already up to date. Automatic startup checks only show
+    ///   the sheet when a new version is actually available.
+    func checkForUpdates(userInitiated: Bool = false) {
         guard !updateStatus.isChecking else { return }
         updateStatus = .checking
         Task {
             do {
                 if let release = try await UpdateService.checkForUpdate() {
                     updateStatus = .available(release)
+                    showUpdateSheet = true
                 } else {
                     updateStatus = .upToDate
+                    if userInitiated { showUpdateSheet = true }
                 }
             } catch {
                 updateStatus = .failed(error.localizedDescription)
+                if userInitiated { showUpdateSheet = true }
             }
         }
     }
