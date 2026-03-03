@@ -9,9 +9,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-macOS-blue" />
-  <img src="https://img.shields.io/badge/swift-5.9+-orange" />
+  <img src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" />
+  <img src="https://img.shields.io/badge/swift-6-orange" />
   <img src="https://img.shields.io/badge/UI-SwiftUI-purple" />
+  <img src="https://img.shields.io/github/v/release/xaif/r2Vault?label=latest" />
 </p>
 
 ---
@@ -27,14 +28,27 @@
 **Upload**
 - Drag-and-drop files and folders directly from Finder
 - Concurrent uploads with real-time progress tracking
-- Automatic URL copy to clipboard on success
-- Upload history with clickable links
+- Cancel individual uploads or all at once
+- Automatic public URL copy to clipboard on upload completion
+- Upload history with copy, download, and delete actions
+
+**Menu Bar Widget**
+- Lives in the macOS menu bar — always one click away
+- Drop files directly onto the popover to upload instantly
+- Live per-file upload progress with cancel buttons
+- Recent uploads list with copy link, download, and delete
+- Stays open while you work — won't dismiss on focus loss
 
 **Manage**
-- Create and delete folders
-- Batch delete with confirmation
-- Multiple R2 bucket support with saved credentials
+- Create folders and delete files/folders with confirmation dialogs
+- Recursive folder deletion — removes all contents in one action
+- Batch delete multiple items with a single confirmation
+- Multiple R2 bucket support — switch buckets from the gear menu
 - Presigned URL generation for secure sharing
+
+**Auto-Update**
+- Check for Updates via the app menu (R2 Vault → Check for Updates)
+- Automatic in-app download and install of new releases
 
 ## Screenshot
 
@@ -50,7 +64,16 @@
 - Xcode 16+
 - A [Cloudflare R2](https://developers.cloudflare.com/r2/) bucket with API credentials
 
-### Installation
+### Download
+
+Grab the latest DMG from [Releases](https://github.com/xaif/r2Vault/releases/latest).
+
+> **Note:** r2Vault is not notarized with Apple. If macOS shows a "damaged" warning, run this in Terminal after copying the app to Applications:
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/R2Vault.app
+> ```
+
+### Build from Source
 
 1. Clone the repository:
    ```bash
@@ -83,34 +106,42 @@
 | Concurrency | Swift async/await, TaskGroup |
 | Auth | AWS Signature V4 (CryptoKit) |
 | Networking | URLSession |
-| Storage | UserDefaults, FileManager |
+| Storage | UserDefaults, Keychain |
+| Menu Bar | AppKit `NSStatusItem` + `NSPopover` |
 
 ## Project Structure
 
 ```
 Fiaxe/
 ├── Models/
-│   ├── R2Credentials.swift     # Bucket credential model
-│   ├── R2Object.swift          # File/folder object model
-│   ├── UploadItem.swift        # Upload item representation
-│   └── UploadTask.swift        # Upload task with progress
+│   ├── R2Credentials.swift       # Bucket credential model
+│   ├── R2Object.swift            # File/folder object model
+│   ├── UploadItem.swift          # Upload history item
+│   └── UploadTask.swift          # Upload task with progress + cancellation
 ├── Services/
-│   ├── AWSV4Signer.swift       # S3-compatible request signing
-│   ├── KeychainService.swift   # Credential persistence
-│   ├── R2BrowseService.swift   # Bucket listing & management
-│   ├── R2UploadService.swift   # File upload with progress
-│   ├── ThumbnailCache.swift    # Memory + disk thumbnail cache
-│   ├── UploadHistoryStore.swift# Upload history persistence
+│   ├── AWSV4Signer.swift         # S3-compatible request signing
+│   ├── KeychainService.swift     # Credential persistence
+│   ├── MenuBarManager.swift      # NSStatusItem + NSPopover management
+│   ├── R2BrowseService.swift     # Bucket listing, delete, recursive ops
+│   ├── R2UploadService.swift     # File upload with progress streaming
+│   ├── ThumbnailCache.swift      # Memory + disk thumbnail cache
+│   ├── UpdateService.swift       # GitHub release update checker
+│   ├── UploadHistoryStore.swift  # Upload history persistence
 │   └── QuickLookCoordinator.swift
 ├── ViewModels/
-│   └── AppViewModel.swift      # Central app state
+│   └── AppViewModel.swift        # Central app state
 └── Views/
-    ├── BrowserView.swift       # Main file browser
-    ├── SettingsView.swift      # Credentials & preferences
-    ├── UploadQueueView.swift   # Active uploads
-    ├── UploadHistoryView.swift # Past uploads
+    ├── BrowserView.swift         # Main file browser
+    ├── MenuBarView.swift         # Menu bar popover UI
+    ├── SettingsView.swift        # Credentials & preferences
+    ├── UploadQueueView.swift     # Active uploads HUD
+    ├── UploadHistoryView.swift   # Past uploads
     └── ...
 ```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 ## License
 
