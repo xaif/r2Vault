@@ -65,9 +65,9 @@ jobs:
             -scheme Fiaxe \
             -configuration Release \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="R2Vault Self-Signed" \
-            CODE_SIGNING_REQUIRED=YES \
-            OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
             MACOSX_DEPLOYMENT_TARGET=15.0 \
             clean build
 
@@ -78,9 +78,10 @@ jobs:
           DMG_OUT="/tmp/r2Vault.dmg"
           VOLNAME="R2 Vault"
 
-          # Re-sign with self-signed cert and strip quarantine
+          # Sign with self-signed cert so macOS shows "unidentified developer"
+          # instead of "damaged" — allows users to bypass via right-click Open
           codesign --force --deep --sign "R2Vault Self-Signed" \
-            --keychain build.keychain "$APP"
+            --keychain ~/Library/Keychains/build.keychain-db "$APP"
           xattr -cr "$APP"
 
           hdiutil create -size 80m -fs HFS+ -volname "$VOLNAME" "$DMG_TMP" -ov -quiet
