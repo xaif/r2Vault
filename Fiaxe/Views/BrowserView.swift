@@ -387,8 +387,6 @@ struct BrowserView: View {
             .help("View Mode")
         }
 
-        ToolbarSpacer(.fixed)
-
         // Upload actions
         ToolbarItemGroup(placement: .primaryAction) {
             Menu {
@@ -402,8 +400,6 @@ struct BrowserView: View {
             .disabled(!viewModel.hasCredentials)
             .help("Upload")
         }
-
-        ToolbarSpacer(.fixed)
 
         // Utility actions
         ToolbarItemGroup(placement: .primaryAction) {

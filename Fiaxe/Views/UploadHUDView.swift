@@ -108,7 +108,7 @@ struct UploadHUDView: View {
                 .frame(maxHeight: 200)
             }
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 6)
         .frame(width: 280)
         .transition(.move(edge: .bottom).combined(with: .opacity))
