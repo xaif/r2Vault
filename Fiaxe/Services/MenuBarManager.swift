@@ -1,6 +1,15 @@
 import AppKit
 import SwiftUI
 
+/// NSHostingController subclass whose window always reports itself as key,
+/// preventing the popover content from desaturating when focus moves elsewhere.
+private final class AlwaysActiveHostingController<Content: View>: NSHostingController<Content> {
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.makeKey()
+    }
+}
+
 /// Manages a persistent NSStatusItem + NSPopover for the menu bar widget.
 /// Using NSPopover with .applicationDefined behavior means it never auto-dismisses
 /// when the app loses focus — only a click on the status bar icon closes it.
@@ -36,7 +45,7 @@ final class MenuBarManager: NSObject {
         popover.behavior = .applicationDefined
         popover.animates = true
 
-        let hostingController = NSHostingController(
+        let hostingController = AlwaysActiveHostingController(
             rootView: MenuBarView()
                 .environment(viewModel)
         )
@@ -51,8 +60,9 @@ final class MenuBarManager: NSObject {
         } else {
             guard let button = statusItem.button else { return }
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            // Bring app to front so the popover is interactive
             NSApp.activate(ignoringOtherApps: true)
+            // Force the popover window to always appear active so colors never desaturate
+            popover.contentViewController?.view.window?.makeKey()
         }
     }
 }

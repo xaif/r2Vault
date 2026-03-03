@@ -2,6 +2,19 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.3] - 2026-03-04
+
+### Added
+- Menu bar icon now appears immediately on launch without needing to open the main window first
+- About R2 Vault and Check for Updates moved to the system app menu (R2Vault menu bar)
+- Gear menu in popover streamlined to bucket switcher and Quit only
+- Main window can be reopened from the popover even after being closed
+
+### Fixed
+- Orange accent color now applied correctly regardless of system accent color setting
+- Badge colors in Recent Uploads list no longer desaturate when clicking inside the popover
+- Open R2 Vault button now reliably opens the main window even when it has been closed
+
 ## [v1.2.2] - 2026-03-04
 
 ### Added

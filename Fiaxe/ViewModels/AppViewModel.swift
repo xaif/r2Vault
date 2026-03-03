@@ -45,6 +45,9 @@ final class AppViewModel {
     /// Set briefly after a successful upload to trigger "Link copied!" toast
     var clipboardToastFileName: String? = nil
 
+    /// Registered by the SwiftUI scene to reopen the main window when it has been closed.
+    var openMainWindow: (() -> Void)? = nil
+
     // Update state
     enum UpdateStatus {
         case idle

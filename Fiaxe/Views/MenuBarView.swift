@@ -108,18 +108,6 @@ struct MenuBarView: View {
                     }
                 }
 
-                Button {
-                    openMainWindow()
-                } label: {
-                    Label("Open R2 Vault", systemImage: "arrow.up.right.square")
-                }
-
-                Button {
-                    openSettings()
-                } label: {
-                    Label("Settings…", systemImage: "gear")
-                }
-
                 Divider()
 
                 Button(role: .destructive) {
@@ -287,8 +275,18 @@ struct MenuBarView: View {
 
     private func openMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { !$0.className.contains("StatusBar") && $0.canBecomeMain }) {
+        // Find the main app window — must be a titled window, not a panel or popover
+        let appWindow = NSApp.windows.first {
+            !($0 is NSPanel) &&
+            $0.styleMask.contains(.titled) &&
+            !$0.className.contains("StatusBar") &&
+            !$0.className.contains("Popover")
+        }
+        if let window = appWindow {
             window.makeKeyAndOrderFront(nil)
+        } else {
+            // Window was closed — use SwiftUI's openWindow to reopen it
+            viewModel.openMainWindow?()
         }
     }
 
@@ -361,16 +359,20 @@ private struct MenuBarHistoryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            // File type icon badge
+            // File type icon badge — stable tinted background, not affected by focus state
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(iconBackground)
-                    .frame(width: 30, height: 30)
-                    .modifier(GlassIconBadgeModifier(color: iconColor))
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(iconColor.opacity(0.12))
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .strokeBorder(iconColor.opacity(0.18), lineWidth: 0.5)
+                    )
                 Image(systemName: fileIcon)
-                    .font(.system(size: 13))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(iconColor)
             }
+            .shadow(color: iconColor.opacity(0.15), radius: 4, x: 0, y: 2)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.fileName)
@@ -464,18 +466,6 @@ private struct MenuBarHistoryRow: View {
         }
     }
 
-    private var iconBackground: Color {
-        let ext = (item.fileName as NSString).pathExtension.lowercased()
-        switch ext {
-        case "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tiff", "svg": return Color.purple.opacity(0.15)
-        case "mp4", "mov", "avi", "mkv", "webm", "m4v": return Color.pink.opacity(0.15)
-        case "mp3", "m4a", "wav", "aac", "flac", "ogg": return Color.orange.opacity(0.15)
-        case "pdf": return Color.red.opacity(0.15)
-        case "zip", "tar", "gz", "bz2", "7z", "rar": return Color.brown.opacity(0.15)
-        default: return Color.blue.opacity(0.12)
-        }
-    }
-
     private var iconColor: Color {
         let ext = (item.fileName as NSString).pathExtension.lowercased()
         switch ext {
@@ -485,18 +475,6 @@ private struct MenuBarHistoryRow: View {
         case "pdf": return .red
         case "zip", "tar", "gz", "bz2", "7z", "rar": return Color(NSColor.brown)
         default: return .blue
-        }
-    }
-}
-
-/// Glass tinted icon badge — glass tint on macOS 26+, plain fill on older.
-private struct GlassIconBadgeModifier: ViewModifier {
-    let color: Color
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content.glassEffect(.regular.tint(color), in: .rect(cornerRadius: 6))
-        } else {
-            content // plain fill already set on the shape
         }
     }
 }
