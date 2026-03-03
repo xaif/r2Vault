@@ -50,7 +50,7 @@ struct MenuBarView: View {
                 if let name = viewModel.clipboardToastFileName {
                     Text(name)
                         .font(.system(size: 10))
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -59,14 +59,7 @@ struct MenuBarView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(red: 0.1, green: 0.28, blue: 0.15).opacity(0.95))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.green.opacity(0.3), lineWidth: 1)
-                )
-        )
+        .glassEffect(.regular.tint(.green), in: .rect(cornerRadius: 10))
         .padding(.horizontal, 10)
         .padding(.bottom, 10)
     }
@@ -123,9 +116,9 @@ struct MenuBarView: View {
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color(NSColor.secondaryLabelColor))
-                    .frame(width: 24, height: 24)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.07)))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 7))
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -139,19 +132,22 @@ struct MenuBarView: View {
 
     private var dropZone: some View {
         ZStack {
+            // Glass background — tinted blue when targeted
             RoundedRectangle(cornerRadius: 10)
-                .fill(isDropTargeted
-                      ? Color.accentColor.opacity(0.12)
-                      : Color(NSColor.quaternaryLabelColor).opacity(0.4))
-
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(
-                    isDropTargeted ? Color.accentColor : Color(NSColor.separatorColor),
-                    style: StrokeStyle(
-                        lineWidth: isDropTargeted ? 2 : 1.5,
-                        dash: isDropTargeted ? [] : [6, 4]
-                    )
+                .fill(Color.clear)
+                .glassEffect(
+                    isDropTargeted ? .regular.tint(.accentColor) : .regular,
+                    in: .rect(cornerRadius: 10)
                 )
+
+            // Dashed border when idle
+            if !isDropTargeted {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(
+                        Color(NSColor.separatorColor),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                    )
+            }
 
             VStack(spacing: 8) {
                 ZStack {
@@ -210,9 +206,8 @@ struct MenuBarView: View {
                 } label: {
                     Text("Cancel All")
                         .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.glass)
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -244,9 +239,8 @@ struct MenuBarView: View {
                 } label: {
                     Image(systemName: "arrow.up.right.square")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color(NSColor.secondaryLabelColor))
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.glass)
                 .help("Open main window")
             }
             .padding(.horizontal, 14)
@@ -302,11 +296,12 @@ private struct MenuBarHistoryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            // File type icon badge
+            // File type icon badge — glass with tint
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(iconBackground)
+                    .fill(Color.clear)
                     .frame(width: 30, height: 30)
+                    .glassEffect(.regular.tint(iconColor), in: .rect(cornerRadius: 6))
                 Image(systemName: fileIcon)
                     .font(.system(size: 13))
                     .foregroundStyle(iconColor)
@@ -326,37 +321,45 @@ private struct MenuBarHistoryRow: View {
 
             // Action buttons — visible on hover
             if isHovered {
-                HStack(spacing: 2) {
+                HStack(spacing: 4) {
                     // Copy link
-                    rowActionButton(
-                        icon: copied ? "checkmark" : "link",
-                        tint: copied ? .green : Color(NSColor.secondaryLabelColor),
-                        help: "Copy URL"
-                    ) {
+                    Button {
                         viewModel.copyToClipboard(item.publicURL.absoluteString)
                         withAnimation { copied = true }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             withAnimation { copied = false }
                         }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "link")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(copied ? .green : .secondary)
+                            .frame(width: 24, height: 24)
                     }
+                    .buttonStyle(.glass)
+                    .help("Copy URL")
 
                     // Download
-                    rowActionButton(
-                        icon: "arrow.down.circle",
-                        tint: Color(NSColor.secondaryLabelColor),
-                        help: "Download to Downloads folder"
-                    ) {
+                    Button {
                         viewModel.downloadHistoryItem(item)
+                    } label: {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(width: 24, height: 24)
                     }
+                    .buttonStyle(.glass)
+                    .help("Download to Downloads folder")
 
                     // Delete
-                    rowActionButton(
-                        icon: "trash",
-                        tint: .red,
-                        help: "Delete from R2"
-                    ) {
+                    Button {
                         showDeleteConfirm = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.red)
+                            .frame(width: 24, height: 24)
                     }
+                    .buttonStyle(.glass)
+                    .help("Delete from R2")
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
@@ -365,7 +368,7 @@ private struct MenuBarHistoryRow: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color(NSColor.quaternaryLabelColor).opacity(0.6) : Color.clear)
+                .fill(isHovered ? Color(NSColor.quaternaryLabelColor).opacity(0.5) : Color.clear)
                 .padding(.horizontal, 4)
         )
         .contentShape(Rectangle())
@@ -386,22 +389,6 @@ private struct MenuBarHistoryRow: View {
         }
     }
 
-    @ViewBuilder
-    private func rowActionButton(icon: String, tint: Color, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(tint)
-                .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color(NSColor.quaternaryLabelColor).opacity(0.5))
-                )
-        }
-        .buttonStyle(.borderless)
-        .help(help)
-    }
-
     private var fileIcon: String {
         let ext = (item.fileName as NSString).pathExtension.lowercased()
         switch ext {
@@ -412,18 +399,6 @@ private struct MenuBarHistoryRow: View {
         case "zip", "tar", "gz", "bz2", "7z", "rar": return "archivebox.fill"
         case "swift", "py", "js", "ts", "json", "xml", "html", "css", "sh": return "chevron.left.forwardslash.chevron.right"
         default: return "doc.fill"
-        }
-    }
-
-    private var iconBackground: Color {
-        let ext = (item.fileName as NSString).pathExtension.lowercased()
-        switch ext {
-        case "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tiff", "svg": return Color.purple.opacity(0.15)
-        case "mp4", "mov", "avi", "mkv", "webm", "m4v": return Color.pink.opacity(0.15)
-        case "mp3", "m4a", "wav", "aac", "flac", "ogg": return Color.orange.opacity(0.15)
-        case "pdf": return Color.red.opacity(0.15)
-        case "zip", "tar", "gz", "bz2", "7z", "rar": return Color.brown.opacity(0.15)
-        default: return Color.blue.opacity(0.12)
         }
     }
 
@@ -482,7 +457,7 @@ private struct MenuBarUploadRow: View {
             Button { task.cancel() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.white.opacity(0.25))
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
             .help("Cancel")
