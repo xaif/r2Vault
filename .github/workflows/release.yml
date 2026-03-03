@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-release:
     runs-on: macos-15
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -79,11 +81,12 @@ jobs:
           echo "DMG_PATH=$DMG_OUT" >> $GITHUB_ENV
 
       - name: Publish Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ github.ref_name }}
-          body: |
-            ## What's New
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes "## What's New
 
-            See the full changelog in the repository.
-          files: ${{ env.DMG_PATH }}
+          See the full changelog in the repository." \
+            "${{ env.DMG_PATH }}"
