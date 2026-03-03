@@ -2,6 +2,12 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.1] - 2026-03-03
+
+### Fixed
+- Delete from context menu now shows a confirmation dialog before removing any file or folder
+- Folder delete confirmation warns that all contents will be permanently removed
+
 ## [v1.2.0] - 2026-03-03
 
 ### Added
