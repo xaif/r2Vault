@@ -10,6 +10,11 @@ struct MenuBarView: View {
         viewModel.uploadTasks.filter { $0.status == .uploading || $0.status == .pending }
     }
 
+    private var currentBucketItems: [UploadItem] {
+        guard let bucket = viewModel.credentials?.bucketName else { return [] }
+        return viewModel.historyStore.items.filter { $0.bucketName == bucket }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 0) {
@@ -23,7 +28,7 @@ struct MenuBarView: View {
                     uploadProgressSection
                 }
 
-                if !viewModel.historyStore.items.isEmpty {
+                if !currentBucketItems.isEmpty {
                     recentUploadsSection
                 }
             }
@@ -35,7 +40,7 @@ struct MenuBarView: View {
                     .zIndex(10)
             }
         }
-        .frame(width: 300)
+        .frame(width: 320)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.clipboardToastFileName != nil)
     }
 
@@ -116,8 +121,8 @@ struct MenuBarView: View {
                     Label("Quit R2 Vault", systemImage: "power")
                 }
             } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 13))
+                Image(systemName: "gear")
+                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
                     .modifier(GlassGearModifier())
@@ -148,31 +153,19 @@ struct MenuBarView: View {
                     )
             }
 
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(isDropTargeted ? Color.accentColor.opacity(0.15) : Color(NSColor.quaternaryLabelColor).opacity(0.3))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: isDropTargeted ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(isDropTargeted ? Color.accentColor : Color(NSColor.secondaryLabelColor))
-                }
+            VStack(spacing: 6) {
+                Image(systemName: isDropTargeted ? "arrow.down.circle.fill" : "arrow.up.circle")
+                    .font(.system(size: 28))
+                    .foregroundStyle(isDropTargeted ? Color.accentColor : Color(NSColor.secondaryLabelColor))
 
-                VStack(spacing: 2) {
-                    Text(isDropTargeted ? "Release to Upload" : "Drop files here")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(isDropTargeted ? Color.accentColor : Color(NSColor.labelColor))
-
-                    if !isDropTargeted {
-                        Text("or click to browse")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color(NSColor.secondaryLabelColor))
-                    }
-                }
+                Text(isDropTargeted ? "Release to Upload" : "Drop files here or click to select")
+                    .font(.system(size: 11))
+                    .foregroundStyle(isDropTargeted ? Color.accentColor : Color(NSColor.secondaryLabelColor))
+                    .multilineTextAlignment(.center)
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, 18)
         }
-        .frame(height: 100)
+        .frame(height: 110)
         .contentShape(Rectangle())
         .onTapGesture { openFilePicker() }
         .dropDestination(for: URL.self) { urls, _ in
@@ -228,29 +221,37 @@ struct MenuBarView: View {
 
             HStack {
                 Text("Recent Uploads")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color(NSColor.secondaryLabelColor))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color(NSColor.tertiaryLabelColor))
                     .textCase(.uppercase)
+                    .kerning(0.4)
                 Spacer()
                 Button {
                     openMainWindow()
                 } label: {
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 12))
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(NSColor.secondaryLabelColor))
                 }
-                .modifier(GlassButtonModifier())
-                .help("Open main window")
+                .buttonStyle(.borderless)
+                .help("Open in main window")
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.bottom, 4)
 
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(viewModel.historyStore.items.prefix(25)) { item in
+                    ForEach(currentBucketItems.prefix(25)) { item in
                         MenuBarHistoryRow(item: item)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .opacity.combined(with: .move(edge: .trailing))
+                                    .animation(.spring(response: 0.35, dampingFraction: 0.85))
+                            ))
                     }
                 }
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: viewModel.historyStore.items.map(\.id))
             }
             .frame(maxHeight: 260)
             .padding(.bottom, 6)
@@ -356,88 +357,87 @@ private struct MenuBarHistoryRow: View {
     @State private var isHovered = false
     @State private var copied = false
     @State private var showDeleteConfirm = false
+    @State private var thumbnail: NSImage? = nil
+
+    private var isImageOrVideo: Bool {
+        let ext = (item.fileName as NSString).pathExtension.lowercased()
+        return ["jpg","jpeg","png","gif","webp","heic","heif","bmp","tiff","svg",
+                "mp4","mov","avi","mkv","webm","m4v"].contains(ext)
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
-            // File type icon badge — stable tinted background, not affected by focus state
+        HStack(spacing: 8) {
+            // Thumbnail or icon badge
             ZStack {
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(iconColor.opacity(0.12))
-                    .frame(width: 34, height: 34)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7)
-                            .strokeBorder(iconColor.opacity(0.18), lineWidth: 0.5)
-                    )
-                Image(systemName: fileIcon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(iconColor)
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(NSColor.quaternaryLabelColor).opacity(0.6))
+                    .frame(width: 30, height: 30)
+
+                if let thumb = thumbnail {
+                    Image(nsImage: thumb)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 30, height: 30)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                } else {
+                    Image(systemName: fileIcon)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(iconColor)
+                }
             }
-            .shadow(color: iconColor.opacity(0.15), radius: 4, x: 0, y: 2)
+            .task {
+                guard isImageOrVideo, thumbnail == nil, let creds = viewModel.credentials else { return }
+                thumbnail = await ThumbnailCache.shared.thumbnail(for: item.r2Key, credentials: creds)
+            }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.fileName)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(item.formattedFileSize)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color(NSColor.secondaryLabelColor))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(NSColor.tertiaryLabelColor))
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            // Action buttons — visible on hover
-            if isHovered {
-                HStack(spacing: 4) {
-                    Button {
-                        viewModel.copyToClipboard(item.publicURL.absoluteString)
-                        withAnimation { copied = true }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            withAnimation { copied = false }
-                        }
-                    } label: {
-                        Image(systemName: copied ? "checkmark" : "link")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(copied ? .green : .secondary)
-                            .frame(width: 24, height: 24)
+            // Fixed-width action area — always occupies the same space so rows never shift
+            HStack(spacing: 0) {
+                actionButton(
+                    icon: copied ? "checkmark" : "link",
+                    tint: copied ? .green : .secondary,
+                    help: "Copy URL"
+                ) {
+                    viewModel.copyToClipboard(item.publicURL.absoluteString)
+                    withAnimation { copied = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation { copied = false }
                     }
-                    .modifier(GlassButtonModifier())
-                    .help("Copy URL")
-
-                    Button {
-                        viewModel.downloadHistoryItem(item)
-                    } label: {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 11, weight: .medium))
-                            .frame(width: 24, height: 24)
-                    }
-                    .modifier(GlassButtonModifier())
-                    .help("Download to Downloads folder")
-
-                    Button {
-                        showDeleteConfirm = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.red)
-                            .frame(width: 24, height: 24)
-                    }
-                    .modifier(GlassButtonModifier())
-                    .help("Delete from R2")
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+
+                actionButton(icon: "arrow.down.circle", tint: .secondary, help: "Download") {
+                    viewModel.downloadHistoryItem(item)
+                }
+
+                actionButton(icon: "trash", tint: .red, help: "Delete") {
+                    showDeleteConfirm = true
+                }
             }
+            .opacity(isHovered ? 1 : 0)
+            // Always reserve the space even when hidden
+            .frame(width: 72)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color(NSColor.quaternaryLabelColor).opacity(0.5) : Color.clear)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovered ? Color(NSColor.quaternaryLabelColor).opacity(0.45) : Color.clear)
                 .padding(.horizontal, 4)
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .animation(.easeOut(duration: 0.15), value: isHovered)
         .animation(.easeOut(duration: 0.15), value: copied)
         .confirmationDialog(
             "Delete \"\(item.fileName)\"?",
@@ -451,6 +451,18 @@ private struct MenuBarHistoryRow: View {
         } message: {
             Text("This will permanently remove the file from R2 and cannot be undone.")
         }
+    }
+
+    @ViewBuilder
+    private func actionButton(icon: String, tint: Color, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(tint)
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.borderless)
+        .help(help)
     }
 
     private var fileIcon: String {

@@ -565,7 +565,8 @@ final class AppViewModel {
                     fileName: uploadTask.fileName,
                     fileSize: uploadTask.fileSize,
                     r2Key: key,
-                    publicURL: publicURL
+                    publicURL: publicURL,
+                    bucketName: credentials.bucketName
                 )
                 historyStore.add(item)
                 copyToClipboard(publicURL.absoluteString)

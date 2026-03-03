@@ -15,6 +15,7 @@ final class MenuBarManager: NSObject {
         super.init()
         setupStatusItem()
         setupPopover()
+
     }
 
     // MARK: - Setup
@@ -22,7 +23,7 @@ final class MenuBarManager: NSObject {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "arrow.up.to.line.compact",
+            button.image = NSImage(systemSymbolName: "square.and.arrow.up",
                                    accessibilityDescription: "R2 Vault")
             button.action = #selector(togglePopover)
             button.target = self
@@ -31,7 +32,7 @@ final class MenuBarManager: NSObject {
 
     private func setupPopover() {
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 300, height: 400)
+        popover.contentSize = NSSize(width: 320, height: 440)
         // .applicationDefined = popover stays open when app loses focus
         popover.behavior = .applicationDefined
         popover.animates = true

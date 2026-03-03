@@ -2,6 +2,19 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.4] - 2026-03-04
+
+### Added
+- Recent Uploads in the menu bar now filters by the currently selected bucket
+- Menu bar popover redesigned: compact rows, smaller fonts, fixed-width hover action area that doesn't shift layout
+- Drop zone enlarged and simplified
+- Menu bar settings button updated to gear icon
+- Menu bar icon changed to `square.and.arrow.up`
+
+### Changed
+- Hover actions on recent upload rows now fade in/out in a reserved fixed-width slot — no layout jumping
+- Delete animation on recent upload rows now slides and fades smoothly
+
 ## [v1.2.3] - 2026-03-04
 
 ### Added
