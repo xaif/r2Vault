@@ -31,6 +31,16 @@ jobs:
             MACOSX_DEPLOYMENT_TARGET=15.0 \
             clean build
 
+      - name: Ad-hoc Code Sign
+        run: |
+          APP=$(find build/Build/Products/Release -name "*.app" -maxdepth 1 | head -1)
+          # Ad-hoc sign (free, no developer account needed)
+          # --force replaces any existing signature
+          # --deep signs nested frameworks/binaries
+          codesign --force --deep --sign - "$APP"
+          echo "Signed: $APP"
+          codesign --verify --verbose "$APP" || true
+
       - name: Create DMG
         run: |
           APP=$(find build/Build/Products/Release -name "*.app" -maxdepth 1 | head -1)
@@ -39,8 +49,8 @@ jobs:
           DMG_OUT="/tmp/r2Vault.dmg"
           VOLNAME="R2 Vault"
 
-          # Strip any xattrs from the built app
-          xattr -cr "$APP"
+          # Strip quarantine xattrs (preserve code signature)
+          xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 
           # Create writable DMG
           hdiutil create -size 80m -fs HFS+ -volname "$VOLNAME" "$DMG_TMP" -ov -quiet
@@ -91,7 +101,27 @@ jobs:
           fi
           # Write notes to a file to avoid shell quoting issues with special characters
           printf '%s\n' "$NOTES" > /tmp/release_notes.md
-          printf '\n---\n\n## Installation\n\nSince R2 Vault is not notarized with Apple, macOS may show a "damaged" warning.\nRun this in Terminal after copying the app to Applications:\n\n```\nxattr -dr com.apple.quarantine /Applications/R2Vault.app\n```\n' >> /tmp/release_notes.md
+          cat >> /tmp/release_notes.md <<'INSTALL'
+
+---
+
+## Installation
+
+**One-line install (recommended):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/xaif/r2Vault/main/install.sh | bash
+```
+
+**Homebrew:**
+```bash
+brew install --cask --no-quarantine xaif/tap/r2vault
+```
+
+**Manual:** Download the DMG above, drag to Applications, then right-click the app → **Open** (first time only). Or run:
+```
+xattr -dr com.apple.quarantine /Applications/R2Vault.app
+```
+INSTALL
 
       - name: Publish Release
         env:

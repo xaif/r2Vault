@@ -2,6 +2,19 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.5] - 2026-03-04
+
+### Added
+- One-line install script (`curl | bash`) for frictionless installation
+- Homebrew Cask formula for `brew install --cask` support
+- Ad-hoc code signing in CI builds
+- Comprehensive installation instructions in README with multiple methods
+- Every GitHub Release now includes install instructions for all methods
+
+### Changed
+- README rewritten with clear installation guide (right-click Open, terminal, System Settings)
+- Release notes template updated with one-liner, Homebrew, and manual install options
+
 ## [v1.2.4] - 2026-03-04
 
 ### Added

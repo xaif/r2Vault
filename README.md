@@ -56,42 +56,60 @@
   <img src="assets/screenshot.png" width="800" alt="r2Vault — Browse your R2 bucket" />
 </p>
 
-## Getting Started
+## Installation
 
-### Prerequisites
+### One-line Install (Recommended)
 
-- macOS 15.0+
-- Xcode 16+
-- A [Cloudflare R2](https://developers.cloudflare.com/r2/) bucket with API credentials
+Run this in Terminal — it downloads the latest release, installs it, and handles everything:
 
-### Download
+```bash
+curl -fsSL https://raw.githubusercontent.com/xaif/r2Vault/main/install.sh | bash
+```
 
-Grab the latest DMG from [Releases](https://github.com/xaif/r2Vault/releases/latest).
+### Homebrew
 
-> **Note:** r2Vault is not notarized with Apple. If macOS shows a "damaged" warning, run this in Terminal after copying the app to Applications:
-> ```bash
-> xattr -dr com.apple.quarantine /Applications/R2Vault.app
-> ```
+```bash
+brew install --cask --no-quarantine xaif/tap/r2vault
+```
+
+### Manual Download
+
+1. Download the latest DMG from [Releases](https://github.com/xaif/r2Vault/releases/latest)
+2. Open the DMG and drag **R2Vault** to **Applications**
+3. **Important:** Before opening the app, do **one** of the following:
+
+   **Option A — Right-click to Open (easiest):**
+   - Right-click (or Control-click) on R2Vault in Applications
+   - Select **Open** from the context menu
+   - Click **Open** in the dialog that appears
+   - You only need to do this once — after that it opens normally
+
+   **Option B — Terminal command:**
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/R2Vault.app
+   ```
+
+   **Option C — System Settings:**
+   - Try to open the app normally (it will be blocked)
+   - Go to **System Settings → Privacy & Security**
+   - Scroll down and click **Open Anyway** next to the R2Vault message
+
+> **Why is this needed?** r2Vault is free and open source. Apple charges $99/year for app notarization, so macOS treats it as "unidentified". The app is safe — you can [review the source code](https://github.com/xaif/r2Vault) yourself.
 
 ### Build from Source
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/xaif/r2Vault.git
-   cd r2Vault
-   ```
+```bash
+git clone https://github.com/xaif/r2Vault.git
+cd r2Vault
+open Fiaxe.xcodeproj
+```
 
-2. Open the project in Xcode:
-   ```bash
-   open Fiaxe.xcodeproj
-   ```
+Build and run with ⌘R. Requires macOS 15.0+ and Xcode 16+.
 
-3. Build and run (⌘R)
+## Getting Started
 
-### Configuration
-
-1. Launch the app and open **Settings** (⌘,)
-2. Add your R2 credentials:
+1. Launch r2Vault — it lives in your **menu bar**
+2. Open **Settings** (⌘,) and add your R2 credentials:
    - **Account ID** — found in your Cloudflare dashboard
    - **Access Key ID** & **Secret Access Key** — from an R2 API token
    - **Bucket Name**
