@@ -7,7 +7,7 @@ struct ThumbnailView: View {
     let credentials: R2Credentials
     let size: CGFloat
 
-    @State private var thumbnail: NSImage? = nil
+    @State private var thumbnail: PlatformImage? = nil
     @State private var isLoading = false
 
     private var ext: String {
@@ -23,7 +23,7 @@ struct ThumbnailView: View {
     var body: some View {
         Group {
             if let img = thumbnail {
-                Image(nsImage: img)
+                thumbnailImage(img)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: size, height: size)
@@ -50,6 +50,15 @@ struct ThumbnailView: View {
         }
     }
 
+    @ViewBuilder
+    private func thumbnailImage(_ img: PlatformImage) -> Image {
+#if os(macOS)
+        Image(nsImage: img)
+#else
+        Image(uiImage: img)
+#endif
+    }
+
     private var fallbackIcon: some View {
         Image(systemName: iconName)
             .font(.system(size: size * 0.55, weight: .light))
@@ -57,7 +66,7 @@ struct ThumbnailView: View {
             .frame(width: size, height: size)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(NSColor.quaternaryLabelColor).opacity(0.08))
+                    .fill(Color.secondary.opacity(0.08))
             )
             .clipShape(RoundedRectangle(cornerRadius: 10))
     }

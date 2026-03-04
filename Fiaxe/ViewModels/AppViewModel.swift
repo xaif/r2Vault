@@ -1,5 +1,9 @@
 import Foundation
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import UniformTypeIdentifiers
 
 // MARK: - Browser View Mode / Sort / Filter
@@ -38,15 +42,21 @@ final class AppViewModel {
     var hasCredentials: Bool { !(credentials?.isEmpty ?? true) }
 
     // UI state
+    var showFileImporter = false
     var showFolderImporter = false
+#if os(iOS)
+    var showPhotoPicker = false
+#endif
     var alertMessage: String?
     var showAlert = false
 
     /// Set briefly after a successful upload to trigger "Link copied!" toast
     var clipboardToastFileName: String? = nil
 
+#if os(macOS)
     /// Registered by the SwiftUI scene to reopen the main window when it has been closed.
     var openMainWindow: (() -> Void)? = nil
+#endif
 
     // Update state
     enum UpdateStatus {
@@ -133,6 +143,9 @@ final class AppViewModel {
     init() {
         loadCredentials()
         checkForUpdates()
+#if os(iOS)
+        processShareInbox()
+#endif
     }
 
     // MARK: - Credentials
@@ -220,7 +233,7 @@ final class AppViewModel {
 
     func loadCurrentFolder() {
         guard let credentials else {
-            browserError = "Please configure R2 credentials in Settings (⌘,)."
+            browserError = "Please configure R2 credentials in Settings."
             return
         }
         isBrowsing = true
@@ -354,13 +367,15 @@ final class AppViewModel {
         selectedObjectIDs.removeAll()
     }
 
-    // MARK: - Drag-and-Drop
+    // MARK: - Drag-and-Drop / File Handling
 
-    /// Handles URLs dropped from Finder. Directories are recursively enumerated.
+    /// Handles URLs dropped from Finder (macOS) or picked via document picker (iOS).
+    /// Directories are recursively enumerated on macOS; on iOS only flat files are expected.
     func handleDroppedURLs(_ urls: [URL]) {
         var tasks: [FileUploadTask] = []
 
         for url in urls {
+#if os(macOS)
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
 
@@ -370,7 +385,6 @@ final class AppViewModel {
 
             if isDirectory.boolValue {
                 // Recursively enumerate directory contents
-                let dirName = url.lastPathComponent
                 let folderBookmark = try? url.bookmarkData(options: [.withSecurityScope],
                                                          includingResourceValuesForKeys: nil,
                                                          relativeTo: nil)
@@ -402,7 +416,6 @@ final class AppViewModel {
                     tasks.append(task)
                 }
             } else {
-                // Single file — upload into current prefix
                 let values = try? url.resourceValues(forKeys: [.fileSizeKey, .nameKey])
                 let fileName = values?.name ?? url.lastPathComponent
                 let fileSize = Int64(values?.fileSize ?? 0)
@@ -412,6 +425,17 @@ final class AppViewModel {
                 task.uploadKey = r2Key
                 tasks.append(task)
             }
+#else
+            // iOS: treat each URL as a flat file
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .nameKey])
+            let fileName = values?.name ?? url.lastPathComponent
+            let fileSize = Int64(values?.fileSize ?? 0)
+            let r2Key = currentPrefix + fileName
+
+            let task = FileUploadTask(fileURL: url, fileName: fileName, fileSize: fileSize)
+            task.uploadKey = r2Key
+            tasks.append(task)
+#endif
         }
 
         guard !tasks.isEmpty else { return }
@@ -425,6 +449,7 @@ final class AppViewModel {
         var tasks: [FileUploadTask] = []
 
         for url in urls {
+#if os(macOS)
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
 
@@ -444,6 +469,19 @@ final class AppViewModel {
                 task.uploadKey = currentPrefix + fileName
             }
             tasks.append(task)
+#else
+            // iOS: files from document picker are already accessible via security scope
+            let _ = url.startAccessingSecurityScopedResource()
+            let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .nameKey])
+            let fileName = resourceValues?.name ?? url.lastPathComponent
+            let fileSize = Int64(resourceValues?.fileSize ?? 0)
+
+            let task = FileUploadTask(fileURL: url, fileName: fileName, fileSize: fileSize)
+            if !currentPrefix.isEmpty {
+                task.uploadKey = currentPrefix + fileName
+            }
+            tasks.append(task)
+#endif
         }
 
         guard !tasks.isEmpty else { return }
@@ -457,6 +495,7 @@ final class AppViewModel {
 
     @MainActor
     func presentFilePicker() {
+#if os(macOS)
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -466,13 +505,41 @@ final class AppViewModel {
             guard response == .OK, let self else { return }
             self.handleSelectedFiles(panel.urls)
         }
+#else
+        showFileImporter = true
+#endif
     }
+
+    // MARK: - Share Inbox (iOS only)
+
+#if os(iOS)
+    /// Reads any files queued by the Share Extension from the shared App Group container
+    /// and uploads them. Called at launch.
+    func processShareInbox() {
+        let appGroupID = "group.fiaxe.r2Vault"
+        guard let defaults = UserDefaults(suiteName: appGroupID),
+              let pendingStrings = defaults.stringArray(forKey: "pendingShareURLs"),
+              !pendingStrings.isEmpty else { return }
+
+        // Clear the queue immediately so we don't re-process on the next launch
+        defaults.removeObject(forKey: "pendingShareURLs")
+
+        let urls = pendingStrings.compactMap { URL(string: $0) }
+        guard !urls.isEmpty else { return }
+
+        Task { @MainActor in
+            // Wait briefly for credentials to be usable after launch
+            try? await Task.sleep(for: .seconds(1))
+            handleDroppedURLs(urls)
+        }
+    }
+#endif
 
     // MARK: - Upload
 
     private func uploadPendingTasks() async {
         guard let credentials else {
-            showError("Please configure R2 credentials in Settings first (Cmd+,).")
+            showError("Please configure R2 credentials in Settings first.")
             return
         }
 
@@ -499,6 +566,7 @@ final class AppViewModel {
 
         let fileURL = uploadTask.fileURL
 
+#if os(macOS)
         // Re-establish access to the parent folder bookmark (folder uploads)
         var folderURL: URL?
         var folderAccessing = false
@@ -531,6 +599,9 @@ final class AppViewModel {
             fileAccessing = fileURL.startAccessingSecurityScopedResource()
         }
         defer { if fileAccessing { resolvedFileURL.stopAccessingSecurityScopedResource() } }
+#else
+        let resolvedFileURL = fileURL
+#endif
 
         let contentType = mimeType(for: resolvedFileURL)
         // Use explicit upload key (folder-aware) or fall back to random-prefix key
@@ -662,8 +733,12 @@ final class AppViewModel {
     // MARK: - Clipboard
 
     func copyToClipboard(_ string: String) {
+#if os(macOS)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(string, forType: .string)
+#else
+        UIPasteboard.general.string = string
+#endif
     }
 
     // MARK: - Queue Management

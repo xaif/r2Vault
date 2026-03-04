@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 /// A single row for List view — unified files + folders, with selection support.
 struct R2ObjectRow: View {
@@ -14,8 +16,134 @@ struct R2ObjectRow: View {
 
     @State private var copied = false
     @State private var showDeleteConfirm = false
+#if os(iOS)
+    @State private var isDownloading = false
+    @State private var shareItem: URL? = nil
+#endif
 
     var body: some View {
+#if os(iOS)
+        iOSRow
+#else
+        macOSRow
+#endif
+    }
+
+#if os(iOS)
+    private var iOSRow: some View {
+        HStack(spacing: 12) {
+            // File type icon with colored background pill
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(object.isFolder ? Color.accentColor.opacity(0.15) : iconColor.opacity(0.12))
+                    .frame(width: 36, height: 36)
+                Image(systemName: iconName)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(object.isFolder ? Color.accentColor : iconColor)
+            }
+
+            // Name + subtitle
+            VStack(alignment: .leading, spacing: 2) {
+                Text(object.name)
+                    .lineLimit(1)
+                    .font(.body)
+                if object.isFolder {
+                    Text("Folder")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(object.formattedSize) · \(object.formattedDate)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Chevron for folders, nothing for files (actions via swipe/context menu)
+            if object.isFolder {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                onDelete(object)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+
+            if !object.isFolder {
+                Button {
+                    guard !isDownloading,
+                          let remoteURL = AWSV4Signer.presignedURL(for: object.key, credentials: credentials) else { return }
+                    isDownloading = true
+                    Task {
+                        do {
+                            let (tmpURL, _) = try await URLSession.shared.download(from: remoteURL)
+                            // Move to a named temp file so the share sheet shows the right filename
+                            let named = FileManager.default.temporaryDirectory
+                                .appendingPathComponent(object.name)
+                            try? FileManager.default.removeItem(at: named)
+                            try FileManager.default.moveItem(at: tmpURL, to: named)
+                            await MainActor.run {
+                                shareItem = named
+                                isDownloading = false
+                            }
+                        } catch {
+                            await MainActor.run { isDownloading = false }
+                        }
+                    }
+                } label: {
+                    if isDownloading {
+                        Label("Downloading…", systemImage: "arrow.down.circle")
+                    } else {
+                        Label("Download", systemImage: "arrow.down.circle")
+                    }
+                }
+                .tint(.blue)
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if !object.isFolder {
+                Button {
+                    let url = credentials.publicURL(forKey: object.key)
+                    onCopyURL(url.absoluteString)
+                    withAnimation(.easeInOut(duration: 0.15)) { copied = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeInOut(duration: 0.2)) { copied = false }
+                    }
+                } label: {
+                    Label(copied ? "Copied!" : "Copy URL", systemImage: copied ? "checkmark" : "link")
+                }
+                .tint(.indigo)
+            }
+        }
+        .confirmationDialog(
+            "Delete \"\(object.name)\"?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { onDelete(object) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove the file from R2 and cannot be undone.")
+        }
+        .sheet(item: Binding(
+            get: { shareItem.map { ShareableURL(url: $0) } },
+            set: { if $0 == nil { shareItem = nil } }
+        )) { shareable in
+            ShareSheet(url: shareable.url)
+                .presentationDetents([.medium, .large])
+        }
+    }
+#endif
+
+    #if os(macOS)
+    private var macOSRow: some View {
         HStack(spacing: 10) {
             // Icon
             Image(systemName: iconName)
@@ -114,6 +242,7 @@ struct R2ObjectRow: View {
             Text("This will permanently remove the file from R2 and cannot be undone.")
         }
     }
+    #endif
 
     // MARK: - Icon helpers
 
@@ -215,3 +344,24 @@ struct R2IconCell: View {
         }
     }
 }
+
+// MARK: - iOS Share Sheet
+
+#if os(iOS)
+/// Wraps a URL as Identifiable so it can drive a .sheet(item:)
+private struct ShareableURL: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// UIActivityViewController wrapper for sharing/saving a downloaded file.
+private struct ShareSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+#endif

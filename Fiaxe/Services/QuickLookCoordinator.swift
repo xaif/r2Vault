@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Quartz
 
@@ -60,3 +61,5 @@ final class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewP
         false
     }
 }
+
+#endif // os(macOS)

@@ -1,21 +1,30 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 @main
 struct R2VaultApp: App {
+#if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+#endif
     @State private var viewModel: AppViewModel
+#if os(macOS)
     // MenuBarManager is created eagerly so the menu bar icon appears immediately on launch,
     // regardless of whether the main window has been opened yet.
     @State private var menuBarManager: MenuBarManager
+#endif
 
     init() {
         let vm = AppViewModel()
         _viewModel = State(initialValue: vm)
+#if os(macOS)
         _menuBarManager = State(initialValue: MenuBarManager(viewModel: vm))
+#endif
     }
 
     var body: some Scene {
+#if os(macOS)
         WindowGroup(id: "main") {
             ContentView()
                 .environment(viewModel)
@@ -44,11 +53,19 @@ struct R2VaultApp: App {
             SettingsView()
                 .environment(viewModel)
         }
+#else
+        WindowGroup {
+            ContentView()
+                .environment(viewModel)
+                .accentColor(Color(red: 0xF8/255, green: 0x69/255, blue: 0x36/255))
+        }
+#endif
     }
 }
 
-// MARK: - Open Window Handler
+// MARK: - Open Window Handler (macOS only)
 
+#if os(macOS)
 /// Captures the SwiftUI openWindow environment action and registers it with the view model
 /// so non-SwiftUI code (MenuBarManager, MenuBarView) can reopen the main window.
 private struct OpenWindowHandlerModifier: ViewModifier {
@@ -78,3 +95,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 }
+#endif

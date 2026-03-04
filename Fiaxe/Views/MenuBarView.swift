@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
@@ -542,3 +543,5 @@ private struct MenuBarUploadRow: View {
         .padding(.vertical, 5)
     }
 }
+
+#endif // os(macOS)

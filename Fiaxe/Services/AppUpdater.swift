@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import AppKit
 import Darwin
@@ -372,3 +373,5 @@ enum UpdateError: LocalizedError {
         }
     }
 }
+
+#endif // os(macOS)

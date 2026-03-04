@@ -11,14 +11,58 @@ enum SidebarDestination: Hashable {
 
 struct ContentView: View {
     @Environment(AppViewModel.self) private var viewModel
-    @State private var selection: SidebarDestination = .history
-    @State private var bucketsExpanded = true
-    @State private var utilitiesExpanded = true
 
     var body: some View {
         @Bindable var viewModel = viewModel
 
-        NavigationSplitView {
+#if os(macOS)
+        macOSLayout
+            .alert("Error", isPresented: $viewModel.showAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                if let msg = viewModel.alertMessage { Text(msg) }
+            }
+            .sheet(isPresented: $viewModel.showUpdateSheet) {
+                UpdateSheetView()
+                    .environment(viewModel)
+            }
+            .fileImporter(
+                isPresented: $viewModel.showFolderImporter,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: true
+            ) { result in
+                switch result {
+                case .success(let urls): viewModel.handleSelectedFolders(urls)
+                case .failure(let error):
+                    viewModel.alertMessage = error.localizedDescription
+                    viewModel.showAlert = true
+                }
+            }
+#else
+        iOSLayout
+            .alert("Error", isPresented: $viewModel.showAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                if let msg = viewModel.alertMessage { Text(msg) }
+            }
+            .sheet(isPresented: $viewModel.showUpdateSheet) {
+                UpdateSheetView()
+                    .environment(viewModel)
+            }
+#endif
+    }
+
+#if os(macOS)
+    // MARK: - macOS Layout
+
+    @State private var selection: SidebarDestination = .history
+    @State private var bucketsExpanded = true
+    @State private var utilitiesExpanded = true
+
+    private var macOSLayout: some View {
+        @Bindable var viewModel = viewModel
+
+        return NavigationSplitView {
             sidebarContent
                 .navigationSplitViewColumnWidth(min: 160, ideal: 190, max: 240)
         } detail: {
@@ -43,34 +87,17 @@ struct ContentView: View {
                 selection = .bucket(first)
             }
         }
-        .alert("Error", isPresented: $viewModel.showAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            if let msg = viewModel.alertMessage { Text(msg) }
-        }
-        .sheet(isPresented: $viewModel.showUpdateSheet) {
-            UpdateSheetView()
-                .environment(viewModel)
-        }
-        .fileImporter(
-            isPresented: $viewModel.showFolderImporter,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls): viewModel.handleSelectedFolders(urls)
-            case .failure(let error):
-                viewModel.alertMessage = error.localizedDescription
-                viewModel.showAlert = true
-            }
-        }
     }
 
-    // MARK: - Sidebar
-
     private var sidebarContent: some View {
-        List(selection: $selection) {
-            Section(isExpanded: $bucketsExpanded) {
+        List(selection: Binding(
+            get: { selection },
+            set: { if let v = $0 { selection = v } }
+        )) {
+            Section(isExpanded: Binding(
+                get: { bucketsExpanded },
+                set: { bucketsExpanded = $0 }
+            )) {
                 if viewModel.credentialsList.isEmpty {
                     Label("No buckets configured", systemImage: "externaldrive")
                         .foregroundStyle(.secondary)
@@ -85,7 +112,10 @@ struct ContentView: View {
                 Text("Buckets")
             }
 
-            Section(isExpanded: $utilitiesExpanded) {
+            Section(isExpanded: Binding(
+                get: { utilitiesExpanded },
+                set: { utilitiesExpanded = $0 }
+            )) {
                 Label("History", systemImage: "clock")
                     .tag(SidebarDestination.history)
                 Label("Settings", systemImage: "gearshape")
@@ -97,8 +127,6 @@ struct ContentView: View {
         .listStyle(.sidebar)
         .animation(.easeInOut(duration: 0.2), value: viewModel.credentialsList.count)
     }
-
-    // MARK: - Detail
 
     @ViewBuilder
     private var detailContent: some View {
@@ -114,7 +142,94 @@ struct ContentView: View {
             SettingsView()
         }
     }
+
+#else
+    // MARK: - iOS Layout
+
+    @State private var selectedTab: IOSTab = .browser
+
+    private var iOSLayout: some View {
+        @Bindable var viewModel = viewModel
+
+        return TabView(selection: $selectedTab) {
+            // Browser Tab — shows a bucket picker if multiple buckets are configured
+            Tab("Files", systemImage: "folder.fill", value: IOSTab.browser) {
+                NavigationStack {
+                    iOSBrowserTab
+                        .navigationTitle(viewModel.pathSegments.last ?? viewModel.credentials?.bucketName ?? "R2 Vault")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .overlay(alignment: .bottomTrailing) {
+                            UploadHUDView()
+                                .padding(16)
+                                .padding(.bottom, 8)
+                        }
+                        .overlay(alignment: .bottom) {
+                            IOSSelectionBar()
+                                .environment(viewModel)
+                        }
+                }
+            }
+
+            // History Tab
+            Tab("History", systemImage: "clock.fill", value: IOSTab.history) {
+                NavigationStack {
+                    UploadHistoryView()
+                        .navigationTitle("History")
+                        .navigationBarTitleDisplayMode(.large)
+                }
+            }
+
+            // Settings Tab
+            Tab("Settings", systemImage: "gearshape.fill", value: IOSTab.settings) {
+                NavigationStack {
+                    SettingsView()
+                        .navigationTitle("Settings")
+                        .navigationBarTitleDisplayMode(.large)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var iOSBrowserTab: some View {
+        if viewModel.credentialsList.isEmpty {
+            // No credentials — show a helpful empty state with a button to Settings
+            ContentUnavailableView {
+                Label("No Buckets", systemImage: "externaldrive.badge.questionmark")
+            } description: {
+                Text("Add your Cloudflare R2 credentials to get started.")
+            } actions: {
+                Button("Add Credentials") {
+                    selectedTab = .settings
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        } else if viewModel.credentialsList.count == 1 {
+            BrowserView()
+        } else {
+            // Multiple buckets: show a list to pick from, then push into BrowserView
+            List(viewModel.credentialsList) { creds in
+                NavigationLink {
+                    BrowserView()
+                        .onAppear { viewModel.selectCredentials(id: creds.id) }
+                        .navigationTitle(creds.bucketName)
+                } label: {
+                    Label(creds.bucketName, systemImage: "externaldrive.fill")
+                }
+            }
+            .listStyle(.insetGrouped)
+        }
+    }
+#endif
 }
+
+// MARK: - iOS Tab Model
+
+#if os(iOS)
+enum IOSTab: Hashable {
+    case browser, history, settings
+}
+#endif
 
 #Preview {
     ContentView()

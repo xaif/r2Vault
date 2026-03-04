@@ -1,8 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(iOS)
+import PhotosUI
+#endif
 
-/// Finder-like R2 bucket browser with Icons / List / Gallery view modes,
-/// Finder-style toolbar, path bar, multi-select, and drag-and-drop upload.
+/// Finder-like R2 bucket browser with Icons / List view modes,
+/// path bar, multi-select, and drag-and-drop upload (macOS).
 struct BrowserView: View {
     @Environment(AppViewModel.self) private var viewModel
     @State private var showNewFolderSheet = false
@@ -10,19 +13,30 @@ struct BrowserView: View {
     @State private var isDropTargeted = false
     @State private var showDeleteConfirm = false
     @State private var pendingDeleteItem: R2Object? = nil
+#if os(iOS)
+    @State private var photosPickerSelection: [PhotosPickerItem] = []
+    @State private var swipeOffset: CGFloat = 0
+    @State private var swipeDirection: SwipeDirection = .none
+
+    private enum SwipeDirection { case none, back, forward }
+    private let swipeThreshold: CGFloat = 60
+#endif
 
     var body: some View {
         @Bindable var vm = viewModel
 
         VStack(spacing: 0) {
-            // Path bar
+#if os(macOS)
+            // Path bar (macOS only — on iOS the navigation title serves this purpose)
             if viewModel.credentials != nil {
                 pathBar
                 Divider()
             }
+#endif
 
             // Content
             ZStack {
+#if os(macOS)
                 mainContent
                     .dropDestination(for: URL.self) { urls, _ in
                         guard viewModel.hasCredentials else { return false }
@@ -30,6 +44,45 @@ struct BrowserView: View {
                         return true
                     } isTargeted: { isDropTargeted = $0 }
                 if isDropTargeted { dropOverlay }
+#else
+                mainContent
+                    .offset(x: swipeOffset)
+                    .gesture(
+                        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                            .onChanged { value in
+                                let dx = value.translation.width
+                                let dy = value.translation.height
+                                // Only track horizontal swipes (not scrolling)
+                                guard abs(dx) > abs(dy) else { return }
+                                if dx > 0, viewModel.canGoBack {
+                                    swipeDirection = .back
+                                    swipeOffset = min(dx * 0.3, 40)
+                                } else if dx < 0, viewModel.canGoForward {
+                                    swipeDirection = .forward
+                                    swipeOffset = max(dx * 0.3, -40)
+                                }
+                            }
+                            .onEnded { value in
+                                let dx = value.translation.width
+                                if swipeDirection == .back, dx > swipeThreshold {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                        swipeOffset = 0
+                                    }
+                                    viewModel.navigateBack()
+                                } else if swipeDirection == .forward, dx < -swipeThreshold {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                        swipeOffset = 0
+                                    }
+                                    viewModel.navigateForward()
+                                } else {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                        swipeOffset = 0
+                                    }
+                                }
+                                swipeDirection = .none
+                            }
+                    )
+#endif
             }
             .animation(.easeInOut(duration: 0.2), value: viewModel.isBrowsing)
             .animation(.easeInOut(duration: 0.2), value: viewModel.browserError)
@@ -44,6 +97,13 @@ struct BrowserView: View {
                 viewModel.loadCurrentFolder()
             }
         }
+#if os(iOS)
+        .onChange(of: viewModel.currentPrefix) { _, _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                swipeOffset = 0
+            }
+        }
+#endif
         .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
         .confirmationDialog(
             "Delete \(viewModel.selectedObjectIDs.count) item\(viewModel.selectedObjectIDs.count == 1 ? "" : "s")?",
@@ -75,6 +135,35 @@ struct BrowserView: View {
                 }
             }
         }
+        // iOS file importer
+        .fileImporter(
+            isPresented: $vm.showFileImporter,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls): viewModel.handleSelectedFiles(urls)
+            case .failure(let error):
+                vm.alertMessage = error.localizedDescription
+                vm.showAlert = true
+            }
+        }
+#if os(iOS)
+        // iOS photo picker
+        .photosPicker(
+            isPresented: $vm.showPhotoPicker,
+            selection: $photosPickerSelection,
+            maxSelectionCount: 20,
+            matching: .any(of: [.images, .videos]),
+            photoLibrary: .shared()
+        )
+        .onChange(of: photosPickerSelection) { _, newItems in
+            if !newItems.isEmpty {
+                handleSelectedPhotos(newItems)
+                photosPickerSelection = []
+            }
+        }
+#endif
     }
 
     // MARK: - Path Bar
@@ -107,7 +196,11 @@ struct BrowserView: View {
             .padding(.horizontal, 14)
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.pathSegments)
         }
+#if os(iOS)
+        .frame(height: 40)
+#else
         .frame(height: 30)
+#endif
         .background(.regularMaterial)
     }
 
@@ -115,15 +208,23 @@ struct BrowserView: View {
         Button(action: action) {
             HStack(spacing: 3) {
                 Image(systemName: systemImage)
+#if os(iOS)
+                    .font(.system(size: 13))
+#else
                     .font(.system(size: 11))
+#endif
                 Text(label)
+#if os(iOS)
+                    .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
+#else
                     .font(.system(size: 12, weight: isCurrent ? .semibold : .regular))
+#endif
             }
             .foregroundStyle(isCurrent ? AnyShapeStyle(Color.primary) : AnyShapeStyle(Color.accentColor))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
             .background(isCurrent ? Color.secondary.opacity(0.1) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .disabled(isCurrent)
@@ -154,8 +255,8 @@ struct BrowserView: View {
     private var iconsView: some View {
         ScrollView {
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 120, maximum: 140), spacing: 12)],
-                spacing: 12
+                columns: [GridItem(.adaptive(minimum: 100, maximum: 130), spacing: 10)],
+                spacing: 10
             ) {
                 ForEach(viewModel.allBrowserItems) { item in
                     FinderIconCell(
@@ -163,6 +264,7 @@ struct BrowserView: View {
                         credentials: viewModel.credentials ?? .empty,
                         isSelected: viewModel.selectedObjectIDs.contains(item.id)
                     )
+#if os(macOS)
                     .onTapGesture(count: 2) {
                         if item.isFolder {
                             viewModel.navigateToFolder(item)
@@ -176,6 +278,19 @@ struct BrowserView: View {
                     .onTapGesture(count: 1) {
                         toggleSelection(item)
                     }
+#else
+                    .onTapGesture {
+                        if item.isFolder {
+                            viewModel.navigateToFolder(item)
+                        }
+                        // files: tap does nothing — use long-press to select
+                    }
+                    .onLongPressGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            toggleSelection(item)
+                        }
+                    }
+#endif
                     .contextMenu { rowContextMenu(for: item) }
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
@@ -183,20 +298,24 @@ struct BrowserView: View {
             .padding(16)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.allBrowserItems.map(\.id))
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(Color.secondary.opacity(0.05))
+#if os(macOS)
         .onTapGesture {
             withAnimation(.easeOut(duration: 0.15)) {
                 viewModel.clearSelection()
             }
         }
+#endif
     }
 
     // MARK: - List View
 
     private var listView: some View {
         VStack(spacing: 0) {
+#if os(macOS)
             listHeader
             Divider()
+#endif
             List {
                 ForEach(viewModel.allBrowserItems) { item in
                     R2ObjectRow(
@@ -205,18 +324,43 @@ struct BrowserView: View {
                         isSelected: viewModel.selectedObjectIDs.contains(item.id),
                         onNavigate: { viewModel.navigateToFolder($0) },
                         onCopyURL: { viewModel.copyToClipboard($0) },
-                        onPreview: { QuickLookCoordinator.shared.preview($0, credentials: viewModel.credentials ?? .empty) },
+                        onPreview: {
+#if os(macOS)
+                            QuickLookCoordinator.shared.preview($0, credentials: viewModel.credentials ?? .empty)
+#else
+                            _ = $0
+#endif
+                        },
                         onDownload: { viewModel.downloadToDestination(from: $0, dest: $1) },
                         onDelete: { item in Task { await viewModel.deleteObject(item) } }
                     )
+#if os(macOS)
                     .onTapGesture { toggleSelection(item) }
+#else
+                    .onTapGesture {
+                        if item.isFolder {
+                            viewModel.navigateToFolder(item)
+                        }
+                        // files: tap does nothing — use long-press or swipe to act
+                    }
+                    .onLongPressGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            toggleSelection(item)
+                        }
+                    }
+#endif
                     .contextMenu { rowContextMenu(for: item) }
                 }
             }
+#if os(iOS)
+            .listStyle(.insetGrouped)
+#else
             .listStyle(.inset)
+#endif
         }
     }
 
+#if os(macOS)
     private var listHeader: some View {
         HStack(spacing: 8) {
             Spacer().frame(width: 28)
@@ -246,18 +390,19 @@ struct BrowserView: View {
         }
         .buttonStyle(.plain)
     }
+#endif
 
     // MARK: - Empty / Loading / Error
 
     private var emptyView: some View {
         ZStack {
-            Color(NSColor.controlBackgroundColor).ignoresSafeArea()
+            Color.secondary.opacity(0.05).ignoresSafeArea()
             VStack(spacing: 14) {
                 Image(systemName: "arrow.up.to.line.compact")
                     .font(.system(size: 48)).foregroundStyle(.quaternary)
-                Text("Drop Files to Upload")
+                Text("No Files Here")
                     .font(.title3).fontWeight(.semibold).foregroundStyle(.secondary)
-                Text("Or click + in the toolbar")
+                Text("Tap + to upload files")
                     .font(.subheadline).foregroundStyle(.tertiary)
                 Button { viewModel.presentFilePicker() } label: {
                     Label("Select Files…", systemImage: "plus.circle.fill")
@@ -274,7 +419,7 @@ struct BrowserView: View {
             Text("Loading…").font(.callout).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(Color.secondary.opacity(0.05))
     }
 
     private func errorView(_ message: String) -> some View {
@@ -291,17 +436,20 @@ struct BrowserView: View {
         ContentUnavailableView {
             Label("No Credentials", systemImage: "key.slash")
         } description: {
-            Text("Open Settings (⌘,) to configure your R2 access keys.")
+            Text("Open Settings to configure your R2 access keys.")
         } actions: {
+#if os(macOS)
             Button("Open Settings") {
                 NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             }
             .buttonStyle(.borderedProminent)
+#endif
         }
     }
 
-    // MARK: - Drop Overlay
+    // MARK: - Drop Overlay (macOS only)
 
+#if os(macOS)
     private var dropOverlay: some View {
         ZStack {
             Color.accentColor.opacity(0.07)
@@ -317,6 +465,7 @@ struct BrowserView: View {
         }
         .allowsHitTesting(false)
     }
+#endif
 
     // MARK: - Status Bar
 
@@ -324,6 +473,7 @@ struct BrowserView: View {
         let total = viewModel.allBrowserItems.count
         let sel   = viewModel.selectedObjectIDs.count
         return Group {
+#if os(macOS)
             if total > 0 || sel > 0 {
                 HStack(spacing: 10) {
                     if sel > 0 {
@@ -345,8 +495,14 @@ struct BrowserView: View {
                 .background(.bar)
                 .overlay(alignment: .top) { Divider() }
             }
+#else
+            // iOS: no idle count bar — selection shown as floating pill
+            EmptyView()
+#endif
         }
     }
+
+
 
     // MARK: - Context Menu
 
@@ -358,11 +514,13 @@ struct BrowserView: View {
             }
             Divider()
         } else {
+#if os(macOS)
             Button {
                 QuickLookCoordinator.shared.preview(item, credentials: viewModel.credentials ?? .empty)
             } label: {
                 Label("Preview", systemImage: "eye")
             }
+#endif
             Button {
                 let url = (viewModel.credentials ?? .empty).publicURL(forKey: item.key)
                 viewModel.copyToClipboard(url.absoluteString)
@@ -384,7 +542,8 @@ struct BrowserView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        // Back / Forward buttons — left navigation area
+#if os(macOS)
+        // Back / Forward buttons — macOS left navigation area
         ToolbarItem(placement: .navigation) {
             Button { viewModel.navigateBack() } label: {
                 Image(systemName: "chevron.left")
@@ -399,8 +558,28 @@ struct BrowserView: View {
             .disabled(!viewModel.canGoForward)
             .help("Forward")
         }
+#else
+        // iOS: show a "Back" button in the navigation bar only when inside a subfolder
+        if !viewModel.pathSegments.isEmpty {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    viewModel.navigateBack()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .fontWeight(.semibold)
+                        Text(viewModel.pathSegments.count >= 2
+                             ? viewModel.pathSegments[viewModel.pathSegments.count - 2]
+                             : (viewModel.credentials?.bucketName ?? "Back"))
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+#endif
 
-        // Compact segmented view mode picker
+        // Compact segmented view mode picker (macOS only)
+#if os(macOS)
         ToolbarItem(placement: .primaryAction) {
             Picker("View", selection: Binding(
                 get: { viewModel.viewMode },
@@ -413,16 +592,24 @@ struct BrowserView: View {
             .frame(width: 72)
             .help("View Mode")
         }
+#endif
 
+#if os(macOS)
         if #available(macOS 26.0, *) {
             ToolbarSpacer(.fixed)
         }
+#endif
 
         // Upload actions
         ToolbarItemGroup(placement: .primaryAction) {
             Menu {
                 Button("Upload Files…") { viewModel.presentFilePicker() }
+#if os(iOS)
+                Button("Upload from Photos…") { viewModel.showPhotoPicker = true }
+#endif
+#if os(macOS)
                 Button("Upload Folder…") { viewModel.showFolderImporter = true }
+#endif
                 Divider()
                 Button("New Folder…") { newFolderName = ""; showNewFolderSheet = true }
             } label: {
@@ -432,11 +619,12 @@ struct BrowserView: View {
             .help("Upload")
         }
 
+#if os(macOS)
         if #available(macOS 26.0, *) {
             ToolbarSpacer(.fixed)
         }
 
-        // Utility actions
+        // macOS: individual utility buttons
         ToolbarItemGroup(placement: .primaryAction) {
             Button { viewModel.loadCurrentFolder() } label: {
                 Image(systemName: "arrow.clockwise")
@@ -447,8 +635,62 @@ struct BrowserView: View {
             sortMenu
             selectionMenu
         }
+#else
+        // iOS: collapse refresh + sort + selection into a single "…" menu
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button {
+                    viewModel.loadCurrentFolder()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .disabled(!viewModel.hasCredentials)
 
+                Divider()
 
+                Menu("Sort by…") {
+                    ForEach(BrowserSortKey.allCases) { key in
+                        Button {
+                            if viewModel.sortKey == key { viewModel.sortAscending.toggle() }
+                            else { viewModel.sortKey = key; viewModel.sortAscending = true }
+                        } label: {
+                            HStack {
+                                Text(key.rawValue)
+                                if viewModel.sortKey == key {
+                                    Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        viewModel.sortAscending.toggle()
+                    } label: {
+                        Label(viewModel.sortAscending ? "Ascending" : "Descending",
+                              systemImage: viewModel.sortAscending ? "arrow.up" : "arrow.down")
+                    }
+                }
+
+                Divider()
+
+                Button { viewModel.selectAll() } label: {
+                    Label("Select All", systemImage: "checkmark.circle")
+                }
+                Button { viewModel.clearSelection() } label: {
+                    Label("Deselect All", systemImage: "xmark.circle")
+                }
+                if !viewModel.selectedObjectIDs.isEmpty {
+                    Divider()
+                    Button(role: .destructive) { showDeleteConfirm = true } label: {
+                        Label("Delete Selected (\(viewModel.selectedObjectIDs.count))", systemImage: "trash")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .disabled(!viewModel.hasCredentials)
+        }
+#endif
     }
 
     // MARK: - Sort Menu
@@ -505,7 +747,10 @@ struct BrowserView: View {
                 .font(.system(size: 32)).foregroundStyle(Color.accentColor)
             Text("New Folder").font(.headline)
             TextField("Folder name", text: $newFolderName)
-                .textFieldStyle(.roundedBorder).frame(width: 260)
+                .textFieldStyle(.roundedBorder)
+#if os(macOS)
+                .frame(width: 260)
+#endif
                 .onSubmit { commitNewFolder() }
             HStack(spacing: 10) {
                 Button("Cancel") { showNewFolderSheet = false }
@@ -516,7 +761,10 @@ struct BrowserView: View {
                     .disabled(newFolderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(26).frame(minWidth: 310)
+        .padding(26)
+#if os(macOS)
+        .frame(minWidth: 310)
+#endif
     }
 
     private func commitNewFolder() {
@@ -528,30 +776,11 @@ struct BrowserView: View {
 
     // MARK: - Helpers
 
-    private var selectionBinding: Binding<Set<UUID>> {
-        Binding(get: { viewModel.selectedObjectIDs }, set: { viewModel.selectedObjectIDs = $0 })
-    }
-
     private func toggleSelection(_ item: R2Object) {
         if viewModel.selectedObjectIDs.contains(item.id) {
             viewModel.selectedObjectIDs.remove(item.id)
         } else {
             viewModel.selectedObjectIDs.insert(item.id)
-        }
-    }
-
-    private func iconName(for item: R2Object) -> String {
-        if item.isFolder { return "folder.fill" }
-        let ext = (item.name as NSString).pathExtension.lowercased()
-        switch ext {
-        case "jpg","jpeg","png","gif","webp","heic","heif","bmp","tiff","svg": return "photo"
-        case "mp4","mov","avi","mkv","webm","m4v": return "film"
-        case "mp3","m4a","wav","aac","flac","ogg": return "music.note"
-        case "pdf": return "doc.richtext"
-        case "zip","tar","gz","bz2","7z","rar": return "archivebox"
-        case "swift","py","js","ts","json","xml","html","css","sh","rb","go","rs":
-            return "chevron.left.forwardslash.chevron.right"
-        default: return "doc"
         }
     }
 }
@@ -565,25 +794,46 @@ struct FinderIconCell: View {
 
     @State private var isHovered = false
 
+#if os(iOS)
+    private let thumbnailSize: CGFloat = 80
+#else
+    private let thumbnailSize: CGFloat = 72
+#endif
+
     var body: some View {
         VStack(spacing: 6) {
-            ThumbnailView(object: object, credentials: credentials, size: 72)
+            ThumbnailView(object: object, credentials: credentials, size: thumbnailSize)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                        .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2.5)
                 )
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(NSColor.controlBackgroundColor))
+                        .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.05))
                 )
+#if os(macOS)
                 .scaleEffect(isHovered && !isSelected ? 1.04 : 1.0)
+#endif
+                .overlay(alignment: .topTrailing) {
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.white, Color.accentColor)
+                            .font(.system(size: 18))
+                            .padding(4)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
 
             Text(object.name)
                 .font(.caption2)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(isSelected ? .primary : .secondary)
+#if os(iOS)
+                .frame(maxWidth: 100)
+#else
                 .frame(maxWidth: 120)
+#endif
         }
         .padding(6)
         .background(
@@ -595,9 +845,11 @@ struct FinderIconCell: View {
                 )
         )
         .contentShape(Rectangle())
+#if os(macOS)
         .onHover { isHovered = $0 }
+#endif
         .animation(.easeOut(duration: 0.15), value: isHovered)
-        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
     }
 }
 
@@ -607,8 +859,96 @@ extension R2Credentials {
     static let empty = R2Credentials(accountId: "", accessKeyId: "", secretAccessKey: "", bucketName: "")
 }
 
+// MARK: - iOS floating selection bar
+
+#if os(iOS)
+struct IOSSelectionBar: View {
+    @Environment(AppViewModel.self) private var viewModel
+    @State private var showDeleteConfirm = false
+
+    var body: some View {
+        let sel = viewModel.selectedObjectIDs.count
+        Group {
+            if sel > 0 {
+                HStack(spacing: 16) {
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Delete (\(sel))", systemImage: "trash")
+                            .font(.callout.weight(.semibold))
+                    }
+                    .foregroundStyle(.red)
+
+                    Spacer()
+
+                    Button {
+                        withAnimation { viewModel.clearSelection() }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: sel > 0)
+        .confirmationDialog(
+            "Delete \(viewModel.selectedObjectIDs.count) item\(viewModel.selectedObjectIDs.count == 1 ? "" : "s")?",
+            isPresented: $showDeleteConfirm, titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { Task { await viewModel.deleteSelected() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove the selected items from R2 and cannot be undone.")
+        }
+    }
+}
+#endif
+
+// MARK: - Photo picker helper (iOS only)
+
+#if os(iOS)
+extension BrowserView {
+    /// Loads each PhotosPickerItem as Data, writes it to a temp file,
+    /// then hands the resulting URLs to the view model's existing uploader.
+    private func handleSelectedPhotos(_ items: [PhotosPickerItem]) {
+        Task {
+            var tempURLs: [URL] = []
+            for item in items {
+                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                let utType = item.supportedContentTypes.first
+                let ext = utType.flatMap { UTType($0.identifier)?.preferredFilenameExtension } ?? "bin"
+                let baseName = (item.itemIdentifier ?? UUID().uuidString)
+                    .replacingOccurrences(of: "/", with: "_")
+                let fileName = baseName.hasSuffix(".\(ext)") ? baseName : "\(baseName).\(ext)"
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(fileName)
+                do {
+                    try data.write(to: tempURL)
+                    tempURLs.append(tempURL)
+                } catch {
+                    // Skip files we can't write
+                }
+            }
+            if !tempURLs.isEmpty {
+                await MainActor.run { viewModel.handleDroppedURLs(tempURLs) }
+            }
+        }
+    }
+}
+#endif
+
 #Preview {
     BrowserView()
         .environment(AppViewModel())
+#if os(macOS)
         .frame(width: 860, height: 580)
+#endif
 }
