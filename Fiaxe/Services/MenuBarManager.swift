@@ -13,9 +13,13 @@ final class MenuBarManager: NSObject {
     init(viewModel: AppViewModel) {
         self.viewModel = viewModel
         super.init()
-        setupStatusItem()
-        setupPopover()
-
+        // Defer status item creation until the app has a window server
+        // connection; creating it during App.init() causes a
+        // CGSConnectionByID assertion crash on macOS 15.6+.
+        DispatchQueue.main.async { [self] in
+            setupStatusItem()
+            setupPopover()
+        }
     }
 
     // MARK: - Setup

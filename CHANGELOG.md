@@ -2,6 +2,11 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.6] - 2026-03-05
+
+### Fixed
+- Crash on launch on macOS 15.6 caused by creating NSStatusItem before window server connection is established
+
 ## [v1.2.5] - 2026-03-04
 
 ### Added
