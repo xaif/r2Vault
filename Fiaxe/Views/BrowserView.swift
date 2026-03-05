@@ -40,7 +40,9 @@ struct BrowserView: View {
                 mainContent
                     .dropDestination(for: URL.self) { urls, _ in
                         guard viewModel.hasCredentials else { return false }
-                        viewModel.handleDroppedURLs(urls)
+                        Task { @MainActor in
+                            viewModel.handleDroppedURLs(urls)
+                        }
                         return true
                     } isTargeted: { isDropTargeted = $0 }
                 if isDropTargeted { dropOverlay }
@@ -142,7 +144,10 @@ struct BrowserView: View {
             allowsMultipleSelection: true
         ) { result in
             switch result {
-            case .success(let urls): viewModel.handleSelectedFiles(urls)
+            case .success(let urls):
+                Task { @MainActor in
+                    viewModel.handleSelectedFiles(urls)
+                }
             case .failure(let error):
                 vm.alertMessage = error.localizedDescription
                 vm.showAlert = true

@@ -171,7 +171,9 @@ struct MenuBarView: View {
         .onTapGesture { openFilePicker() }
         .dropDestination(for: URL.self) { urls, _ in
             guard viewModel.hasCredentials else { return false }
-            viewModel.handleDroppedURLs(urls)
+            Task { @MainActor in
+                viewModel.handleDroppedURLs(urls)
+            }
             return true
         } isTargeted: { isDropTargeted = $0 }
         .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isDropTargeted)
@@ -271,7 +273,9 @@ struct MenuBarView: View {
         NSApp.activate(ignoringOtherApps: true)
         panel.begin { response in
             guard response == .OK else { return }
-            viewModel.handleSelectedFiles(panel.urls)
+            Task { @MainActor in
+                viewModel.handleSelectedFiles(panel.urls)
+            }
         }
     }
 

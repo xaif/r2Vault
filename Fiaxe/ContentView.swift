@@ -32,7 +32,10 @@ struct ContentView: View {
                 allowsMultipleSelection: true
             ) { result in
                 switch result {
-                case .success(let urls): viewModel.handleSelectedFolders(urls)
+                case .success(let urls):
+                    Task { @MainActor in
+                        viewModel.handleSelectedFolders(urls)
+                    }
                 case .failure(let error):
                     viewModel.alertMessage = error.localizedDescription
                     viewModel.showAlert = true

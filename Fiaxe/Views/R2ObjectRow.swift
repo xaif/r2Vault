@@ -145,6 +145,13 @@ struct R2ObjectRow: View {
     #if os(macOS)
     private var macOSRow: some View {
         HStack(spacing: 10) {
+            // Explicit selection marker so selected rows are obvious.
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .opacity(isSelected ? 1 : 0)
+                .frame(width: 14, alignment: .center)
+
             // Icon
             Image(systemName: iconName)
                 .font(.system(size: 15))
@@ -222,7 +229,12 @@ struct R2ObjectRow: View {
                 .frame(width: 80, alignment: .trailing)
             }
         }
+        .padding(.horizontal, 6)
         .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.clear)
+        )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             if object.isFolder {

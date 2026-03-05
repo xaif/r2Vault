@@ -371,6 +371,7 @@ final class AppViewModel {
 
     /// Handles URLs dropped from Finder (macOS) or picked via document picker (iOS).
     /// Directories are recursively enumerated on macOS; on iOS only flat files are expected.
+    @MainActor
     func handleDroppedURLs(_ urls: [URL]) {
         var tasks: [FileUploadTask] = []
 
@@ -445,6 +446,7 @@ final class AppViewModel {
 
     // MARK: - File Selection
 
+    @MainActor
     func handleSelectedFiles(_ urls: [URL]) {
         var tasks: [FileUploadTask] = []
 
@@ -489,6 +491,7 @@ final class AppViewModel {
         Task { await uploadPendingTasks() }
     }
 
+    @MainActor
     func handleSelectedFolders(_ urls: [URL]) {
         handleDroppedURLs(urls)
     }
@@ -503,7 +506,9 @@ final class AppViewModel {
         panel.allowedContentTypes = [.item]
         panel.begin { [weak self] response in
             guard response == .OK, let self else { return }
-            self.handleSelectedFiles(panel.urls)
+            Task { @MainActor in
+                self.handleSelectedFiles(panel.urls)
+            }
         }
 #else
         showFileImporter = true
@@ -743,6 +748,7 @@ final class AppViewModel {
 
     // MARK: - Queue Management
 
+    @MainActor
     func removeCompletedAndFailed() {
         uploadTasks.removeAll { $0.status == .completed || $0.status == .failed }
     }
