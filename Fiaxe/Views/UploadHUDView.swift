@@ -33,10 +33,14 @@ struct UploadHUDView: View {
 
     /// Combined progress across all uploading tasks
     private var overallProgress: Double {
-        let uploading = viewModel.uploadTasks.filter { $0.status == .uploading || $0.status == .completed }
-        guard !uploading.isEmpty else { return 0 }
-        let sum = uploading.reduce(0.0) { acc, t in acc + (t.status == .completed ? 1.0 : t.progress) }
-        return sum / Double(viewModel.uploadTasks.count)
+        let trackable = viewModel.uploadTasks.filter {
+            $0.status == .uploading || $0.status == .completed || $0.status == .failed || $0.status == .cancelled
+        }
+        guard !trackable.isEmpty else { return 0 }
+        let sum = trackable.reduce(0.0) { acc, t in
+            acc + (t.status == .completed ? 1.0 : t.progress)
+        }
+        return sum / Double(trackable.count)
     }
 
     var body: some View {
@@ -69,10 +73,10 @@ struct UploadHUDView: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(headerTitle)
-                        .font(.caption)
+                        .font(headerTitleFont)
                         .fontWeight(.semibold)
                     Text(headerSubtitle)
-                        .font(.caption2)
+                        .font(headerSubtitleFont)
                         .foregroundStyle(.secondary)
                 }
 
@@ -83,7 +87,7 @@ struct UploadHUDView: View {
                     withAnimation(.spring(response: 0.3)) { isExpanded.toggle() }
                 } label: {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -94,19 +98,28 @@ struct UploadHUDView: View {
                         viewModel.removeCompletedAndFailed()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
+
+#if os(iOS)
+            // Global progress bar for quick scan (Google Drive style)
+            ProgressView(value: overallProgress)
+                .progressViewStyle(.linear)
+                .tint(.accentColor)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.bottom, 10)
+#endif
 
             // Expanded task list
             if isExpanded {
                 Divider()
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, horizontalPadding - 4)
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -118,15 +131,19 @@ struct UploadHUDView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 200)
+                .frame(maxHeight: taskListMaxHeight)
             }
         }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
 #if os(macOS)
-        .glassEffectIfAvailable(cornerRadius: 12)
+        .glassEffectIfAvailable(cornerRadius: cornerRadius)
 #endif
-        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 6)
+        .shadow(color: .black.opacity(0.12), radius: shadowRadius, x: 0, y: shadowYOffset)
+#if os(iOS)
+        .frame(maxWidth: .infinity)
+#else
         .frame(width: 280)
+#endif
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.spring(response: 0.4), value: viewModel.uploadTasks.count)
     }
@@ -152,7 +169,72 @@ struct UploadHUDView: View {
             let failed = viewModel.uploadTasks.filter { $0.status == .failed }.count
             return failed > 0 ? "\(completedCount) done, \(failed) failed" : "\(completedCount) file\(completedCount == 1 ? "" : "s") uploaded"
         }
-        return "\(viewModel.uploadTasks.filter { $0.status == .pending }.count) pending"
+        let pending = viewModel.uploadTasks.filter { $0.status == .pending }.count
+        return "\(Int(overallProgress * 100))% complete • \(pending) pending"
+    }
+
+    private var cornerRadius: CGFloat {
+#if os(iOS)
+        return 18
+#else
+        return 12
+#endif
+    }
+
+    private var horizontalPadding: CGFloat {
+#if os(iOS)
+        return 14
+#else
+        return 12
+#endif
+    }
+
+    private var verticalPadding: CGFloat {
+#if os(iOS)
+        return 12
+#else
+        return 10
+#endif
+    }
+
+    private var taskListMaxHeight: CGFloat {
+#if os(iOS)
+        return 240
+#else
+        return 200
+#endif
+    }
+
+    private var headerTitleFont: Font {
+#if os(iOS)
+        return .subheadline
+#else
+        return .caption
+#endif
+    }
+
+    private var headerSubtitleFont: Font {
+#if os(iOS)
+        return .caption
+#else
+        return .caption2
+#endif
+    }
+
+    private var shadowRadius: CGFloat {
+#if os(iOS)
+        return 18
+#else
+        return 12
+#endif
+    }
+
+    private var shadowYOffset: CGFloat {
+#if os(iOS)
+        return 10
+#else
+        return 6
+#endif
     }
 }
 
@@ -162,7 +244,7 @@ private struct HUDTaskRow: View {
     let task: FileUploadTask
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             Image(systemName: icon)
                 .foregroundStyle(iconColor)
                 .font(.system(size: 13))
@@ -177,7 +259,7 @@ private struct HUDTaskRow: View {
                 switch task.status {
                 case .pending:
                     Text("Waiting…")
-                        .font(.caption2)
+                        .font(statusFont)
                         .foregroundStyle(.secondary)
                 case .uploading:
                     ProgressView(value: task.progress)
@@ -185,23 +267,37 @@ private struct HUDTaskRow: View {
                         .tint(.accentColor)
                 case .completed:
                     Text("Done")
-                        .font(.caption2)
+                        .font(statusFont)
                         .foregroundStyle(.green)
                 case .failed:
                     Text(task.errorMessage ?? "Failed")
-                        .font(.caption2)
+                        .font(statusFont)
                         .foregroundStyle(.red)
                         .lineLimit(1)
                 case .cancelled:
                     Text("Cancelled")
-                        .font(.caption2)
+                        .font(statusFont)
                         .foregroundStyle(.secondary)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer(minLength: 0)
-
-            if task.status == .pending || task.status == .uploading {
+            if task.status == .uploading {
+                Text("\(Int(task.progress * 100))%")
+                    .font(statusFont)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 34, alignment: .trailing)
+                Button {
+                    task.cancel()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.borderless)
+                .help("Cancel upload")
+            } else if task.status == .pending {
                 Button {
                     task.cancel()
                 } label: {
@@ -213,13 +309,13 @@ private struct HUDTaskRow: View {
                 .help("Cancel upload")
             } else {
                 Text(ByteCountFormatter.string(fromByteCount: task.fileSize, countStyle: .file))
-                    .font(.caption2)
+                    .font(statusFont)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
+        .padding(.horizontal, rowHorizontalPadding)
+        .padding(.vertical, rowVerticalPadding)
     }
 
     private var icon: String {
@@ -240,5 +336,29 @@ private struct HUDTaskRow: View {
         case .failed:    return .red
         case .cancelled: return .secondary
         }
+    }
+
+    private var statusFont: Font {
+#if os(iOS)
+        return .caption
+#else
+        return .caption2
+#endif
+    }
+
+    private var rowHorizontalPadding: CGFloat {
+#if os(iOS)
+        return 14
+#else
+        return 12
+#endif
+    }
+
+    private var rowVerticalPadding: CGFloat {
+#if os(iOS)
+        return 9
+#else
+        return 7
+#endif
     }
 }

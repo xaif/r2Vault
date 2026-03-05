@@ -519,6 +519,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = R2Vault;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = NO;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "R2Vault uses photo library access to preserve original photo and video filenames for uploads.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -565,6 +566,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = R2Vault;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = NO;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "R2Vault uses photo library access to preserve original photo and video filenames for uploads.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

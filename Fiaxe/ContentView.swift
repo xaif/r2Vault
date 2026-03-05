@@ -67,7 +67,6 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 160, ideal: 190, max: 240)
         } detail: {
             detailContent
-                .navigationTitle("")
                 .overlay(alignment: .bottomTrailing) {
                     UploadHUDView()
                         .padding(16)
@@ -136,38 +135,34 @@ struct ContentView: View {
                 .id(id)
                 .onAppear { viewModel.selectCredentials(id: id) }
                 .onChange(of: id) { _, newID in viewModel.selectCredentials(id: newID) }
+                .navigationTitle(macOSBrowserTitle)
         case .history:
             UploadHistoryView()
+                .navigationTitle("History")
         case .settings:
             SettingsView()
+                .navigationTitle("Settings")
         }
+    }
+
+    /// Builds the macOS toolbar title: shows the deepest path segment, falling back to the bucket name.
+    private var macOSBrowserTitle: String {
+        if let last = viewModel.pathSegments.last { return last }
+        return viewModel.credentials?.bucketName ?? "R2 Vault"
     }
 
 #else
     // MARK: - iOS Layout
 
     @State private var selectedTab: IOSTab = .browser
+    @State private var browserPath: [String] = []
+    @State private var isSearchPresented = false
 
     private var iOSLayout: some View {
-        @Bindable var viewModel = viewModel
-
         return TabView(selection: $selectedTab) {
             // Browser Tab — shows a bucket picker if multiple buckets are configured
             Tab("Files", systemImage: "folder.fill", value: IOSTab.browser) {
-                NavigationStack {
-                    iOSBrowserTab
-                        .navigationTitle(viewModel.pathSegments.last ?? viewModel.credentials?.bucketName ?? "R2 Vault")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .overlay(alignment: .bottomTrailing) {
-                            UploadHUDView()
-                                .padding(16)
-                                .padding(.bottom, 8)
-                        }
-                        .overlay(alignment: .bottom) {
-                            IOSSelectionBar()
-                                .environment(viewModel)
-                        }
-                }
+                iOSBrowserStack
             }
 
             // History Tab
@@ -190,6 +185,54 @@ struct ContentView: View {
         }
     }
 
+    private var iOSBrowserStack: some View {
+        @Bindable var viewModel = viewModel
+
+        return NavigationStack(path: $browserPath) {
+            Group {
+                if isSearchPresented || !viewModel.filterText.isEmpty {
+                    iOSBrowserTab
+                        .searchable(
+                            text: $viewModel.filterText,
+                            isPresented: $isSearchPresented,
+                            placement: .navigationBarDrawer(displayMode: .automatic),
+                            prompt: "Search"
+                        )
+                } else {
+                    iOSBrowserTab
+                }
+            }
+            .navigationTitle(viewModel.credentials?.bucketName ?? "R2 Vault")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: String.self) { folderKey in
+                BrowserView(folderPrefix: folderKey)
+                    .navigationTitle(folderKey
+                        .split(separator: "/", omittingEmptySubsequences: true)
+                        .last.map(String.init) ?? folderKey)
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isSearchPresented = true
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .accessibilityLabel("Search")
+                }
+            }
+            .overlay(alignment: .bottom) {
+                IOSSelectionBar()
+                    .environment(viewModel)
+            }
+            .onChange(of: viewModel.filterText) { _, newValue in
+                if newValue.isEmpty {
+                    isSearchPresented = false
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private var iOSBrowserTab: some View {
         if viewModel.credentialsList.isEmpty {
@@ -205,17 +248,16 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
             }
         } else if viewModel.credentialsList.count == 1 {
-            BrowserView()
+            BrowserView(folderPrefix: "")
         } else {
             // Multiple buckets: show a list to pick from, then push into BrowserView
             List(viewModel.credentialsList) { creds in
-                NavigationLink {
-                    BrowserView()
-                        .onAppear { viewModel.selectCredentials(id: creds.id) }
-                        .navigationTitle(creds.bucketName)
-                } label: {
+                NavigationLink(value: "") {
                     Label(creds.bucketName, systemImage: "externaldrive.fill")
                 }
+                .simultaneousGesture(TapGesture().onEnded {
+                    viewModel.selectCredentials(id: creds.id)
+                })
             }
             .listStyle(.insetGrouped)
         }
