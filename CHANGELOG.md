@@ -2,6 +2,12 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.7] - 2026-03-05
+
+### Fixed
+- File picker and drag/drop selection updates now run on the main actor so selected files appear reliably in the upload queue/HUD
+- macOS list view now shows a clear selection state with an explicit checkmark indicator and stronger row highlight
+
 ## [v1.2.6] - 2026-03-05
 
 ### Fixed
