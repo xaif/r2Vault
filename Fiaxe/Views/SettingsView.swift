@@ -145,6 +145,33 @@ struct SettingsView: View {
                 }
                 .disabled(isTesting || !canSave)
             }
+
+
+#if os(iOS)
+            Section("About") {
+                HStack {
+                    Text("Version")
+                    Spacer()
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.7")
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Build")
+                    Spacer()
+                    Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "7")
+                        .foregroundStyle(.secondary)
+                }
+                Link(destination: URL(string: "https://github.com/xaif/r2Vault")!) {
+                    HStack {
+                        Text("Source Code")
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+#endif
         }
         .formStyle(.grouped)
 #if os(macOS)

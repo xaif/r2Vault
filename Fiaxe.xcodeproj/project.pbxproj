@@ -7,8 +7,32 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C0SHARE00D2F00000000000D /* ShareExtension.appex */ = {isa = PBXBuildFile; fileRef = C0SHARE0022F000000000002 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C0SHARE00D2F00000000000D /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C0SHARE0022F000000000002 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C0SHARE00B2F00000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B554C0022F54C45F0042921F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C0SHARE0012F000000000001;
+			remoteInfo = ShareExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C0SHARE00C2F00000000000C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C0SHARE00D2F00000000000D /* ShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		B50173662F58C2AC00A781C5 /* r2Vault.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = r2Vault.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -65,6 +89,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0SHARE0042F000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -90,23 +121,6 @@
 		};
 /* End PBXGroup section */
 
-
-/* Begin PBXContainerItemProxy for extension */
-		C0SHARE00B2F00000000000B /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = B554C0022F54C45F0042921F /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C0SHARE0012F000000000001;
-			remoteInfo = ShareExtension;
-		};
-/* End PBXContainerItemProxy for extension */
-/* Begin PBXTargetDependency for extension */
-		C0SHARE00A2F00000000000A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C0SHARE0012F000000000001 /* ShareExtension */;
-			targetProxy = C0SHARE00B2F00000000000B /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency for extension */
 /* Begin PBXNativeTarget section */
 		B50173652F58C2AC00A781C5 /* r2Vault */ = {
 			isa = PBXNativeTarget;
@@ -156,7 +170,6 @@
 			productReference = B554C00A2F54C45F0042921F /* R2Vault.app */;
 			productType = "com.apple.product-type.application";
 		};
-
 		C0SHARE0012F000000000001 /* ShareExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C0SHARE0092F000000000009 /* Build configuration list for PBXNativeTarget "ShareExtension" */;
@@ -236,22 +249,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXResourcesBuildPhase section */
-
-
-/* Begin PBXCopyFilesBuildPhase for extension */
-		C0SHARE00C2F00000000000C /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
+		C0SHARE0052F000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
 			files = (
-				C0SHARE00D2F00000000000D /* ShareExtension.appex in Embed Foundation Extensions */,
 			);
-			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXCopyFilesBuildPhase for extension */
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXShellScriptBuildPhase section */
 		B5A0B0102F5A111100111111 /* Increment Build Number */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -273,34 +279,6 @@
 		};
 /* End PBXShellScriptBuildPhase section */
 
-
-/* Begin PBXSourcesBuildPhase extension */
-		C0SHARE0032F000000000003 /* Sources (ShareExtension) */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXSourcesBuildPhase extension */
-/* Begin PBXFrameworksBuildPhase extension */
-		C0SHARE0042F000000000004 /* Frameworks (ShareExtension) */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase extension */
-/* Begin PBXResourcesBuildPhase extension */
-		C0SHARE0052F000000000005 /* Resources (ShareExtension) */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase extension */
 /* Begin PBXSourcesBuildPhase section */
 		B50173622F58C2AC00A781C5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -316,7 +294,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0SHARE0032F000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C0SHARE00A2F00000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C0SHARE0012F000000000001 /* ShareExtension */;
+			targetProxy = C0SHARE00B2F00000000000B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		B501736E2F58C2AC00A781C5 /* Debug */ = {
@@ -330,6 +323,7 @@
 				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = r2Vault;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -340,7 +334,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "1​.2​.7";
 				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.r2Vault;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -365,6 +359,7 @@
 				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = r2Vault;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -375,7 +370,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "1​.2​.7";
 				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.r2Vault;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -534,7 +529,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.2.6;
+				MARKETING_VERSION = 1.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.Fiaxe;
 				PRODUCT_NAME = R2Vault;
 				REGISTER_APP_GROUPS = YES;
@@ -581,7 +576,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.2.6;
+				MARKETING_VERSION = 1.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.Fiaxe;
 				PRODUCT_NAME = R2Vault;
 				REGISTER_APP_GROUPS = YES;
@@ -599,14 +594,13 @@
 			};
 			name = Release;
 		};
-
-		C0SHARE0072F000000000007 /* Debug (ShareExtension) */ = {
+		C0SHARE0072F000000000007 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
-				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "R2 Vault";
@@ -629,13 +623,13 @@
 			};
 			name = Debug;
 		};
-		C0SHARE0082F000000000008 /* Release (ShareExtension) */ = {
+		C0SHARE0082F000000000008 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
-				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "R2 Vault";
@@ -689,7 +683,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-
 		C0SHARE0092F000000000009 /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

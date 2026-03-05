@@ -186,49 +186,53 @@ struct ContentView: View {
     }
 
     private var iOSBrowserStack: some View {
-        @Bindable var viewModel = viewModel
+        NavigationStack(path: $browserPath) {
+            iOSBrowserContent
+        }
+    }
 
-        return NavigationStack(path: $browserPath) {
-            Group {
-                if isSearchPresented || !viewModel.filterText.isEmpty {
-                    iOSBrowserTab
-                        .searchable(
-                            text: $viewModel.filterText,
-                            isPresented: $isSearchPresented,
-                            placement: .navigationBarDrawer(displayMode: .automatic),
-                            prompt: "Search"
-                        )
-                } else {
-                    iOSBrowserTab
+    @ViewBuilder
+    private var iOSBrowserContent: some View {
+        @Bindable var viewModel = viewModel
+        Group {
+            if isSearchPresented || !viewModel.filterText.isEmpty {
+                iOSBrowserTab
+                    .searchable(
+                        text: $viewModel.filterText,
+                        isPresented: $isSearchPresented,
+                        placement: .navigationBarDrawer(displayMode: .automatic),
+                        prompt: "Search"
+                    )
+            } else {
+                iOSBrowserTab
+            }
+        }
+        .navigationTitle(viewModel.credentials?.bucketName ?? "R2 Vault")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: String.self) { folderKey in
+            BrowserView()
+                .navigationTitle(folderKey
+                    .split(separator: "/", omittingEmptySubsequences: true)
+                    .last.map(String.init) ?? folderKey)
+                .navigationBarTitleDisplayMode(.inline)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isSearchPresented = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
                 }
+                .accessibilityLabel("Search")
             }
-            .navigationTitle(viewModel.credentials?.bucketName ?? "R2 Vault")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: String.self) { folderKey in
-                BrowserView(folderPrefix: folderKey)
-                    .navigationTitle(folderKey
-                        .split(separator: "/", omittingEmptySubsequences: true)
-                        .last.map(String.init) ?? folderKey)
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isSearchPresented = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                    }
-                    .accessibilityLabel("Search")
-                }
-            }
-            .overlay(alignment: .bottom) {
-                IOSSelectionBar()
-                    .environment(viewModel)
-            }
-            .onChange(of: viewModel.filterText) { _, newValue in
-                if newValue.isEmpty {
-                    isSearchPresented = false
-                }
+        }
+        .overlay(alignment: .bottom) {
+            IOSSelectionBar()
+                .environment(viewModel)
+        }
+        .onChange(of: viewModel.filterText) { _, newValue in
+            if newValue.isEmpty {
+                isSearchPresented = false
             }
         }
     }
@@ -248,7 +252,7 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
             }
         } else if viewModel.credentialsList.count == 1 {
-            BrowserView(folderPrefix: "")
+            BrowserView()
         } else {
             // Multiple buckets: show a list to pick from, then push into BrowserView
             List(viewModel.credentialsList) { creds in
