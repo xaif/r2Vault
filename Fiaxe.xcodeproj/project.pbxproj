@@ -6,90 +6,20 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		C0SHARE00D2F00000000000D /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C0SHARE0022F000000000002 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-/* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-		C0SHARE00B2F00000000000B /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = B554C0022F54C45F0042921F /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C0SHARE0012F000000000001;
-			remoteInfo = ShareExtension;
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		C0SHARE00C2F00000000000C /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				C0SHARE00D2F00000000000D /* ShareExtension.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
-		B50173662F58C2AC00A781C5 /* r2Vault.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = r2Vault.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B554C00A2F54C45F0042921F /* R2Vault.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = R2Vault.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		C0SHARE0022F000000000002 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		68488822C75C462D91BC4F7E /* Exceptions for "Fiaxe" folder in "r2Vault" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Services/AppUpdater.swift,
-				Services/MenuBarManager.swift,
-				Services/QuickLookCoordinator.swift,
-				Views/MenuBarView.swift,
-			);
-			target = B50173652F58C2AC00A781C5 /* r2Vault */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B50173672F58C2AC00A781C5 /* r2Vault */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = r2Vault;
-			sourceTree = "<group>";
-		};
 		B554C00C2F54C45F0042921F /* Fiaxe */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				68488822C75C462D91BC4F7E /* Exceptions for "Fiaxe" folder in "r2Vault" target */,
-			);
 			path = Fiaxe;
-			sourceTree = "<group>";
-		};
-		C0SHARE0062F000000000006 /* ShareExtension */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = ShareExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		B50173632F58C2AC00A781C5 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		B554C0072F54C45F0042921F /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		C0SHARE0042F000000000004 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -103,8 +33,6 @@
 			isa = PBXGroup;
 			children = (
 				B554C00C2F54C45F0042921F /* Fiaxe */,
-				B50173672F58C2AC00A781C5 /* r2Vault */,
-				C0SHARE0062F000000000006 /* ShareExtension */,
 				B554C00B2F54C45F0042921F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -113,8 +41,6 @@
 			isa = PBXGroup;
 			children = (
 				B554C00A2F54C45F0042921F /* R2Vault.app */,
-				B50173662F58C2AC00A781C5 /* r2Vault.app */,
-				C0SHARE0022F000000000002 /* ShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -122,31 +48,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B50173652F58C2AC00A781C5 /* r2Vault */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = B50173702F58C2AC00A781C5 /* Build configuration list for PBXNativeTarget "r2Vault" */;
-			buildPhases = (
-				B50173622F58C2AC00A781C5 /* Sources */,
-				B50173632F58C2AC00A781C5 /* Frameworks */,
-				B50173642F58C2AC00A781C5 /* Resources */,
-				C0SHARE00C2F00000000000C /* Embed Foundation Extensions */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				C0SHARE00A2F00000000000A /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				B50173672F58C2AC00A781C5 /* r2Vault */,
-				B554C00C2F54C45F0042921F /* Fiaxe */,
-			);
-			name = r2Vault;
-			packageProductDependencies = (
-			);
-			productName = r2Vault;
-			productReference = B50173662F58C2AC00A781C5 /* r2Vault.app */;
-			productType = "com.apple.product-type.application";
-		};
 		B554C0092F54C45F0042921F /* Fiaxe */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B554C0152F54C45F0042921F /* Build configuration list for PBXNativeTarget "Fiaxe" */;
@@ -170,28 +71,6 @@
 			productReference = B554C00A2F54C45F0042921F /* R2Vault.app */;
 			productType = "com.apple.product-type.application";
 		};
-		C0SHARE0012F000000000001 /* ShareExtension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C0SHARE0092F000000000009 /* Build configuration list for PBXNativeTarget "ShareExtension" */;
-			buildPhases = (
-				C0SHARE0032F000000000003 /* Sources */,
-				C0SHARE0042F000000000004 /* Frameworks */,
-				C0SHARE0052F000000000005 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				C0SHARE0062F000000000006 /* ShareExtension */,
-			);
-			name = ShareExtension;
-			packageProductDependencies = (
-			);
-			productName = ShareExtension;
-			productReference = C0SHARE0022F000000000002 /* ShareExtension.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -202,13 +81,7 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
-					B50173652F58C2AC00A781C5 = {
-						CreatedOnToolsVersion = 26.3;
-					};
 					B554C0092F54C45F0042921F = {
-						CreatedOnToolsVersion = 26.3;
-					};
-					C0SHARE0012F000000000001 = {
 						CreatedOnToolsVersion = 26.3;
 					};
 				};
@@ -228,28 +101,12 @@
 			projectRoot = "";
 			targets = (
 				B554C0092F54C45F0042921F /* Fiaxe */,
-				B50173652F58C2AC00A781C5 /* r2Vault */,
-				C0SHARE0012F000000000001 /* ShareExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		B50173642F58C2AC00A781C5 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		B554C0082F54C45F0042921F /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		C0SHARE0052F000000000005 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -280,21 +137,7 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		B50173622F58C2AC00A781C5 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		B554C0062F54C45F0042921F /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		C0SHARE0032F000000000003 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -303,88 +146,7 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		C0SHARE00A2F00000000000A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C0SHARE0012F000000000001 /* ShareExtension */;
-			targetProxy = C0SHARE00B2F00000000000B /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
-		B501736E2F58C2AC00A781C5 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = r2Vault/r2Vault.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = r2Vault;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = "1​.2​.7";
-				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.r2Vault;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		B501736F2F58C2AC00A781C5 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = r2Vault/r2Vault.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = r2Vault;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = "1​.2​.7";
-				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.r2Vault;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
 		B554C0132F54C45F0042921F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -529,7 +291,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.2.7;
+				MARKETING_VERSION = 1.2.8;
 				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.Fiaxe;
 				PRODUCT_NAME = R2Vault;
 				REGISTER_APP_GROUPS = YES;
@@ -576,7 +338,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.2.7;
+				MARKETING_VERSION = 1.2.8;
 				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.Fiaxe;
 				PRODUCT_NAME = R2Vault;
 				REGISTER_APP_GROUPS = YES;
@@ -594,77 +356,9 @@
 			};
 			name = Release;
 		};
-		C0SHARE0072F000000000007 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = ShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "R2 Vault";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.r2Vault.ShareExtension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		C0SHARE0082F000000000008 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = ShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "R2 Vault";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.r2Vault.ShareExtension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B50173702F58C2AC00A781C5 /* Build configuration list for PBXNativeTarget "r2Vault" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				B501736E2F58C2AC00A781C5 /* Debug */,
-				B501736F2F58C2AC00A781C5 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		B554C0052F54C45F0042921F /* Build configuration list for PBXProject "Fiaxe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -679,15 +373,6 @@
 			buildConfigurations = (
 				B554C0162F54C45F0042921F /* Debug */,
 				B554C0172F54C45F0042921F /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		C0SHARE0092F000000000009 /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				C0SHARE0072F000000000007 /* Debug */,
-				C0SHARE0082F000000000008 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

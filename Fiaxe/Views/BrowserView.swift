@@ -2,6 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 #if os(iOS)
 import PhotosUI
+import QuickLook
+import UIKit
 #endif
 
 /// Finder-like R2 bucket browser with Icons / List view modes,
@@ -17,9 +19,15 @@ struct BrowserView: View {
     @State private var photosPickerSelection: [PhotosPickerItem] = []
     @State private var swipeOffset: CGFloat = 0
     @State private var swipeDirection: SwipeDirection = .none
+    @State private var previewItem: PreviewFile? = nil
+    @State private var isPreparingPreview = false
+    @State private var previewLoadingName: String? = nil
+    @State private var navigationAnimationDirection: NavigationAnimationDirection = .forward
 
     private enum SwipeDirection { case none, back, forward }
+    private enum NavigationAnimationDirection { case forward, back }
     private let swipeThreshold: CGFloat = 60
+    private let swipeActivationEdgeWidth: CGFloat = 28
 #endif
 
     var body: some View {
@@ -47,46 +55,22 @@ struct BrowserView: View {
                     } isTargeted: { isDropTargeted = $0 }
                 if isDropTargeted { dropOverlay }
 #else
-                mainContent
+                ZStack {
+                    mainContent
+                        .id(viewModel.currentPrefix)
+                        .transition(folderNavigationTransition)
+                }
+                .clipped()
                     .offset(x: swipeOffset)
-                    .gesture(
-                        DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                            .onChanged { value in
-                                let dx = value.translation.width
-                                let dy = value.translation.height
-                                // Only track horizontal swipes (not scrolling)
-                                guard abs(dx) > abs(dy) else { return }
-                                if dx > 0, viewModel.canGoBack {
-                                    swipeDirection = .back
-                                    swipeOffset = min(dx * 0.3, 40)
-                                } else if dx < 0, viewModel.canGoForward {
-                                    swipeDirection = .forward
-                                    swipeOffset = max(dx * 0.3, -40)
-                                }
-                            }
-                            .onEnded { value in
-                                let dx = value.translation.width
-                                if swipeDirection == .back, dx > swipeThreshold {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                        swipeOffset = 0
-                                    }
-                                    viewModel.navigateBack()
-                                } else if swipeDirection == .forward, dx < -swipeThreshold {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                        swipeOffset = 0
-                                    }
-                                    viewModel.navigateForward()
-                                } else {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                        swipeOffset = 0
-                                    }
-                                }
-                                swipeDirection = .none
-                            }
-                    )
+                    .simultaneousGesture(edgeSwipeGesture)
+                if isNavigatingFolders {
+                    folderLoadingOverlay
+                }
+                if isPreparingPreview {
+                    previewLoadingOverlay
+                }
 #endif
             }
-            .animation(.easeInOut(duration: 0.2), value: viewModel.isBrowsing)
             .animation(.easeInOut(duration: 0.2), value: viewModel.browserError)
 
             // Status bar
@@ -104,6 +88,11 @@ struct BrowserView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 swipeOffset = 0
             }
+        }
+        .animation(.easeInOut(duration: 0.26), value: viewModel.currentPrefix)
+        .sheet(item: $previewItem, onDismiss: deletePreviewFileIfNeeded) { item in
+            QuickLookPreviewSheet(url: item.url)
+                .ignoresSafeArea()
         }
 #endif
         .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
@@ -180,7 +169,7 @@ struct BrowserView: View {
                     label: viewModel.credentials?.bucketName ?? "Bucket",
                     systemImage: "externaldrive.fill",
                     isCurrent: viewModel.pathSegments.isEmpty
-                ) { viewModel.navigateToRoot() }
+                ) { navigateToRootAnimated() }
 
                 ForEach(Array(viewModel.pathSegments.enumerated()), id: \.offset) { idx, segment in
                     Image(systemName: "chevron.right")
@@ -191,7 +180,7 @@ struct BrowserView: View {
                         label: segment,
                         systemImage: "folder.fill",
                         isCurrent: idx == viewModel.pathSegments.count - 1
-                    ) { viewModel.navigateToSegment(idx) }
+                    ) { navigateToSegmentAnimated(idx) }
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .move(edge: .trailing).combined(with: .opacity)
@@ -239,7 +228,7 @@ struct BrowserView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        if viewModel.isBrowsing {
+        if viewModel.isBrowsing && viewModel.browserObjects.isEmpty && viewModel.browserFolders.isEmpty {
             loadingView
         } else if let error = viewModel.browserError {
             errorView(error)
@@ -286,9 +275,10 @@ struct BrowserView: View {
 #else
                     .onTapGesture {
                         if item.isFolder {
-                            viewModel.navigateToFolder(item)
+                            navigateToFolderAnimated(item)
+                        } else {
+                            previewFile(item)
                         }
-                        // files: tap does nothing — use long-press to select
                     }
                     .onLongPressGesture {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -327,7 +317,7 @@ struct BrowserView: View {
                         object: item,
                         credentials: viewModel.credentials ?? .empty,
                         isSelected: viewModel.selectedObjectIDs.contains(item.id),
-                        onNavigate: { viewModel.navigateToFolder($0) },
+                        onNavigate: { navigateToFolderAnimated($0) },
                         onCopyURL: { viewModel.copyToClipboard($0) },
                         onPreview: {
 #if os(macOS)
@@ -344,9 +334,10 @@ struct BrowserView: View {
 #else
                     .onTapGesture {
                         if item.isFolder {
-                            viewModel.navigateToFolder(item)
+                            navigateToFolderAnimated(item)
+                        } else {
+                            previewFile(item)
                         }
-                        // files: tap does nothing — use long-press or swipe to act
                     }
                     .onLongPressGesture {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -358,7 +349,9 @@ struct BrowserView: View {
                 }
             }
 #if os(iOS)
-            .listStyle(.insetGrouped)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.black)
 #else
             .listStyle(.inset)
 #endif
@@ -514,7 +507,7 @@ struct BrowserView: View {
     @ViewBuilder
     private func rowContextMenu(for item: R2Object) -> some View {
         if item.isFolder {
-            Button { viewModel.navigateToFolder(item) } label: {
+            Button { navigateToFolderAnimated(item) } label: {
                 Label("Open", systemImage: "arrow.right.circle")
             }
             Divider()
@@ -522,6 +515,12 @@ struct BrowserView: View {
 #if os(macOS)
             Button {
                 QuickLookCoordinator.shared.preview(item, credentials: viewModel.credentials ?? .empty)
+            } label: {
+                Label("Preview", systemImage: "eye")
+            }
+#else
+            Button {
+                previewFile(item)
             } label: {
                 Label("Preview", systemImage: "eye")
             }
@@ -568,17 +567,12 @@ struct BrowserView: View {
         if !viewModel.pathSegments.isEmpty {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
-                    viewModel.navigateBack()
+                    navigateBackAnimated()
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .fontWeight(.semibold)
-                        Text(viewModel.pathSegments.count >= 2
-                             ? viewModel.pathSegments[viewModel.pathSegments.count - 2]
-                             : (viewModel.credentials?.bucketName ?? "Back"))
-                            .lineLimit(1)
-                    }
+                    Image(systemName: "chevron.left")
+                        .fontWeight(.semibold)
                 }
+                .accessibilityLabel("Back")
             }
         }
 #endif
@@ -749,12 +743,23 @@ struct BrowserView: View {
     private var newFolderSheet: some View {
         VStack(spacing: 18) {
             Image(systemName: "folder.badge.plus")
-                .font(.system(size: 32)).foregroundStyle(Color.accentColor)
-            Text("New Folder").font(.headline)
+                .font(.system(size: 28))
+                .foregroundStyle(Color.accentColor)
+            Text("New Folder")
+                .font(.headline)
             TextField("Folder name", text: $newFolderName)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.secondary.opacity(0.12))
+                )
 #if os(macOS)
                 .frame(width: 260)
+#else
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
 #endif
                 .onSubmit { commitNewFolder() }
             HStack(spacing: 10) {
@@ -769,6 +774,11 @@ struct BrowserView: View {
         .padding(26)
 #if os(macOS)
         .frame(minWidth: 310)
+#else
+        .presentationDetents([.height(240)])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(28)
+        .presentationBackground(.regularMaterial)
 #endif
     }
 
@@ -788,6 +798,193 @@ struct BrowserView: View {
             viewModel.selectedObjectIDs.insert(item.id)
         }
     }
+
+#if os(macOS)
+    private func navigateToFolderAnimated(_ object: R2Object) {
+        viewModel.navigateToFolder(object)
+    }
+
+    private func navigateToSegmentAnimated(_ index: Int) {
+        viewModel.navigateToSegment(index)
+    }
+
+    private func navigateToRootAnimated() {
+        viewModel.navigateToRoot()
+    }
+#endif
+
+#if os(iOS)
+    private var isNavigatingFolders: Bool {
+        viewModel.isBrowsing && (!viewModel.browserObjects.isEmpty || !viewModel.browserFolders.isEmpty)
+    }
+
+    private var folderNavigationTransition: AnyTransition {
+        switch navigationAnimationDirection {
+        case .forward:
+            return .asymmetric(
+                insertion: .move(edge: .trailing),
+                removal: .move(edge: .leading)
+            )
+        case .back:
+            return .asymmetric(
+                insertion: .move(edge: .leading),
+                removal: .move(edge: .trailing)
+            )
+        }
+    }
+
+    private func navigateToFolderAnimated(_ object: R2Object) {
+        navigationAnimationDirection = .forward
+        viewModel.navigateToFolder(object)
+    }
+
+    private func navigateBackAnimated() {
+        navigationAnimationDirection = .back
+        viewModel.navigateBack()
+    }
+
+    private func navigateToSegmentAnimated(_ index: Int) {
+        navigationAnimationDirection = .back
+        viewModel.navigateToSegment(index)
+    }
+
+    private func navigateToRootAnimated() {
+        navigationAnimationDirection = .back
+        viewModel.navigateToRoot()
+    }
+
+    private var edgeSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onChanged { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+
+                // Match native iPhone behavior more closely: only begin from screen edges,
+                // and only if the interaction is clearly horizontal.
+                guard abs(dx) > abs(dy), abs(dx) > 6 else { return }
+
+                let startsNearLeadingEdge = value.startLocation.x <= swipeActivationEdgeWidth
+
+                if dx > 0, startsNearLeadingEdge, viewModel.canGoBack {
+                    swipeDirection = .back
+                    swipeOffset = min(dx * 0.45, 72)
+                }
+            }
+            .onEnded { value in
+                let dx = value.translation.width
+
+                if swipeDirection == .back, dx > swipeThreshold {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                        swipeOffset = 0
+                    }
+                    navigateBackAnimated()
+                } else {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                        swipeOffset = 0
+                    }
+                }
+
+                swipeDirection = .none
+            }
+    }
+
+    private func previewFile(_ object: R2Object) {
+        guard !object.isFolder,
+              !isPreparingPreview,
+              let credentials = viewModel.credentials,
+              let remoteURL = AWSV4Signer.presignedURL(for: object.key, credentials: credentials) else {
+            return
+        }
+
+        previewLoadingName = object.name
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isPreparingPreview = true
+        }
+
+        Task {
+            do {
+                let (tmpURL, _) = try await URLSession.shared.download(from: remoteURL)
+                let previewURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(object.name)
+
+                try? FileManager.default.removeItem(at: previewURL)
+                try FileManager.default.moveItem(at: tmpURL, to: previewURL)
+
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isPreparingPreview = false
+                    }
+                    deletePreviewFileIfNeeded()
+                    previewItem = PreviewFile(url: previewURL)
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isPreparingPreview = false
+                    }
+                    previewLoadingName = nil
+                    viewModel.alertMessage = "Preview failed: \(error.localizedDescription)"
+                    viewModel.showAlert = true
+                }
+            }
+        }
+    }
+
+    private func deletePreviewFileIfNeeded() {
+        guard let url = previewItem?.url else { return }
+        try? FileManager.default.removeItem(at: url)
+        previewItem = nil
+        previewLoadingName = nil
+    }
+
+    private var previewLoadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.large)
+                Text("Preparing preview…")
+                    .font(.headline)
+                if let previewLoadingName {
+                    Text(previewLoadingName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+            .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 8)
+            .padding(.horizontal, 24)
+        }
+        .transition(.opacity)
+    }
+
+    private var folderLoadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.08)
+                .ignoresSafeArea()
+
+            VStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.regular)
+                Text("Loading folder…")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.1), radius: 14, x: 0, y: 8)
+        }
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+#endif
 }
 
 // MARK: - Finder Icon Cell
@@ -867,6 +1064,46 @@ extension R2Credentials {
 // MARK: - iOS floating selection bar
 
 #if os(iOS)
+private struct PreviewFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct QuickLookPreviewSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: QLPreviewController, context: Context) {
+        context.coordinator.url = url
+        uiViewController.reloadData()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(url: url)
+    }
+
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        var url: URL
+
+        init(url: URL) {
+            self.url = url
+        }
+
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
+            1
+        }
+
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+            url as NSURL
+        }
+    }
+}
+
 struct IOSSelectionBar: View {
     @Environment(AppViewModel.self) private var viewModel
     @State private var showDeleteConfirm = false

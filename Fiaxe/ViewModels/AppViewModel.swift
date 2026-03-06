@@ -142,7 +142,6 @@ final class AppViewModel {
 
     init() {
         loadCredentials()
-        checkForUpdates()
 #if os(iOS)
         processShareInbox()
 #endif

@@ -32,23 +32,17 @@ struct R2ObjectRow: View {
 #if os(iOS)
     private var iOSRow: some View {
         HStack(spacing: 12) {
-            // File type icon with colored background pill
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(object.isFolder ? Color.accentColor.opacity(0.15) : iconColor.opacity(0.12))
-                    .frame(width: 36, height: 36)
-                Image(systemName: iconName)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(object.isFolder ? Color.accentColor : iconColor)
-            }
+            Image(systemName: iosIconName)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(iosIconColor)
+                .frame(width: 28, alignment: .center)
 
-            // Name + subtitle
             VStack(alignment: .leading, spacing: 2) {
                 Text(object.name)
                     .lineLimit(1)
-                    .font(.body)
+                    .font(.body.weight(.medium))
                 if object.isFolder {
-                    Text("Folder")
+                    Text(object.formattedDate)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -60,14 +54,13 @@ struct R2ObjectRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Chevron for folders, nothing for files (actions via swipe/context menu)
             if object.isFolder {
                 Image(systemName: "chevron.right")
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
@@ -139,6 +132,8 @@ struct R2ObjectRow: View {
             ShareSheet(url: shareable.url)
                 .presentationDetents([.medium, .large])
         }
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .listRowBackground(Color.clear)
     }
 #endif
 
@@ -309,6 +304,27 @@ struct R2ObjectRow: View {
         let ext = (object.name as NSString).pathExtension.uppercased()
         return ext.isEmpty ? "File" : "\(ext) File"
     }
+
+#if os(iOS)
+    private var iosIconName: String {
+        if object.isFolder { return "folder.fill" }
+        let ext = (object.name as NSString).pathExtension.lowercased()
+        switch ext {
+        case "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tiff", "svg":
+            return "photo"
+        case "mp4", "mov", "avi", "mkv", "webm", "m4v":
+            return "video"
+        case "pdf":
+            return "doc.text"
+        default:
+            return "doc.fill"
+        }
+    }
+
+    private var iosIconColor: Color {
+        .accentColor
+    }
+#endif
 }
 
 // MARK: - Icon Grid Cell

@@ -230,8 +230,15 @@ struct ContentView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            IOSSelectionBar()
-                .environment(viewModel)
+            VStack(spacing: 8) {
+                UploadHUDView()
+                    .environment(viewModel)
+                    .padding(.horizontal, 12)
+
+                IOSSelectionBar()
+                    .environment(viewModel)
+            }
+            .padding(.bottom, 8)
         }
         .onChange(of: viewModel.filterText) { _, newValue in
             if newValue.isEmpty {
