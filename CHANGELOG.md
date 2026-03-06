@@ -2,6 +2,18 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.8] - 2026-03-06
+
+### Added
+- Refreshed macOS upload experience with a richer floating upload HUD, redesigned upload rows, and a stronger empty upload state
+- Improved visual depth for the macOS upload panel with layered material, tinting, and clearer separation between the surface and its contents
+
+### Changed
+- macOS upload UI now more closely matches the polished iOS upload design language for progress, status, and actions
+
+### Fixed
+- Restored missing macOS browser navigation helper wrappers so the project builds cleanly after the upload UI refresh
+
 ## [v1.2.7] - 2026-03-05
 
 ### Fixed
