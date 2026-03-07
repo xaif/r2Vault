@@ -152,13 +152,13 @@ struct SettingsView: View {
                 HStack {
                     Text("Version")
                     Spacer()
-                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.9")
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.10")
                         .foregroundStyle(.secondary)
                 }
                 HStack {
                     Text("Build")
                     Spacer()
-                    Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "9")
+                    Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "10")
                         .foregroundStyle(.secondary)
                 }
                 Link(destination: URL(string: "https://github.com/xaif/r2Vault")!) {

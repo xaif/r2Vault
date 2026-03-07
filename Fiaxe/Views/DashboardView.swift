@@ -222,11 +222,19 @@ struct DashboardView: View {
                                 .padding(.vertical, 8)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
+                                        #if os(iOS)
+                                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                                        #else
                                         .fill(.white.opacity(0.6))
+                                        #endif
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
+                                        #if os(iOS)
+                                        .strokeBorder(.quaternary.opacity(0.4), lineWidth: 0.75)
+                                        #else
                                         .strokeBorder(colorForCategory(category).opacity(0.08), lineWidth: 1)
+                                        #endif
                                 )
                         }
                     }
@@ -525,12 +533,20 @@ struct DashboardView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 10)
+                #if os(iOS)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(.quaternary.opacity(0.4), lineWidth: 0.75)
+                )
+                #else
                 .fill(.white.opacity(0.82))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(Color.accentColor.opacity(0.08), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.03), radius: 8, x: 0, y: 4)
+                #endif
         )
     }
 
@@ -564,6 +580,10 @@ struct DashboardView: View {
     }
 
     private var dashboardBackground: some View {
+        #if os(iOS)
+        Color(uiColor: .systemGroupedBackground)
+            .ignoresSafeArea()
+        #else
         ZStack {
             LinearGradient(
                 colors: [
@@ -587,6 +607,7 @@ struct DashboardView: View {
                 .offset(x: -260, y: 260)
         }
         .ignoresSafeArea()
+        #endif
     }
 
     private func iconForFile(_ name: String) -> String {
@@ -657,12 +678,22 @@ private struct StatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 12)
+                #if os(iOS)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                #else
                 .fill(.white.opacity(0.82))
+                #endif
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
+                        #if os(iOS)
+                        .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.75)
+                        #else
                         .strokeBorder(color.opacity(0.12), lineWidth: 1)
+                        #endif
                 )
+                #if os(macOS)
                 .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 6)
+                #endif
         }
     }
 }
@@ -689,12 +720,22 @@ private struct DashboardSection<Content: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
             RoundedRectangle(cornerRadius: 12)
+                #if os(iOS)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                #else
                 .fill(.white.opacity(0.82))
+                #endif
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
+                        #if os(iOS)
+                        .strokeBorder(.quaternary.opacity(0.4), lineWidth: 0.75)
+                        #else
                         .strokeBorder(.black.opacity(0.04), lineWidth: 1)
+                        #endif
                 )
+                #if os(macOS)
                 .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 8)
+                #endif
         }
     }
 }

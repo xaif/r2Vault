@@ -2,6 +2,12 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.10] - 2026-03-07
+
+### Fixed
+- Restored the intended iOS dashboard appearance after recent macOS-only dashboard styling changes leaked onto iPhone
+- Kept the refreshed macOS dashboard styling while bringing iOS cards, grouped surfaces, and background treatment back to the proper mobile design
+
 ## [v1.2.9] - 2026-03-07
 
 ### Added
