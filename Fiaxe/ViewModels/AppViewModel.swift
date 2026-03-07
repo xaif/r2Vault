@@ -74,6 +74,12 @@ final class AppViewModel {
     var updateStatus: UpdateStatus = .idle
     var showUpdateSheet = false
 
+    // MARK: - Dashboard state
+
+    var bucketStats: BucketStats?
+    var isScanning = false
+    var scanError: String?
+
     // MARK: - Browser state
 
     /// The current folder prefix (e.g. "photos/vacation/"). Empty string = root.
@@ -90,6 +96,22 @@ final class AppViewModel {
     var isBrowsing = false
     /// Non-nil when the last browse attempt failed
     var browserError: String?
+    /// Monotonic request token so stale folder loads cannot overwrite newer navigation state.
+    private var browserLoadGeneration: Int = 0
+    /// The currently active browse task so newer navigation can cancel older folder loads.
+    private var browserLoadTask: Task<Void, Never>?
+    /// Per-bucket folder cache to avoid re-showing the loading state on revisits.
+    private var browserFolderCache: [String: BrowserFolderCacheEntry] = [:]
+    /// Recursive object cache used for in-folder search.
+    private var browserSearchCache: [String: [R2Object]] = [:]
+    /// Search results shown when the user searches within the current folder subtree.
+    private var browserSearchResults: [R2Object] = []
+    /// The folder prefix the current recursive search results belong to.
+    private var browserSearchPrefix: String?
+    /// The currently active recursive search task.
+    private var browserSearchTask: Task<Void, Never>?
+    /// True while a recursive subtree search is in flight.
+    var isSearching = false
 
     /// Path segments derived from `currentPrefix`, e.g. ["photos", "vacation"]
     var pathSegments: [String] {
@@ -102,7 +124,12 @@ final class AppViewModel {
     var viewMode: BrowserViewMode = .list
     var sortKey: BrowserSortKey = .name
     var sortAscending: Bool = true
-    var filterText: String = ""
+    var filterText: String = "" {
+        didSet {
+            guard filterText != oldValue else { return }
+            refreshBrowserSearch()
+        }
+    }
     /// Selected object IDs for multi-select operations
     var selectedObjectIDs: Set<UUID> = []
 
@@ -110,13 +137,22 @@ final class AppViewModel {
     /// All items merged (folders first by default, then files), sorted and filtered
     var allBrowserItems: [R2Object] {
         let combined = browserFolders + browserObjects
-        let filtered: [R2Object]
-        if filterText.isEmpty {
-            filtered = combined
-        } else {
-            filtered = combined.filter { $0.name.localizedCaseInsensitiveContains(filterText) }
+        if filterText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return sortedBrowserItems(combined)
         }
-        return filtered.sorted { a, b in
+
+        let visibleMatches = combined.filter { matchesSearchQuery($0, query: filterText) }
+        let recursiveMatches = browserSearchPrefix == currentPrefix
+            ? browserSearchResults.filter { candidate in
+            !visibleMatches.contains(where: { $0.key == candidate.key && $0.isFolder == candidate.isFolder })
+        }
+            : []
+
+        return sortedBrowserItems(visibleMatches + recursiveMatches)
+    }
+
+    private func sortedBrowserItems(_ items: [R2Object]) -> [R2Object] {
+        items.sorted { a, b in
             // Folders always sort before files when sorting by name/date/kind
             if sortKey != .size && a.isFolder != b.isFolder {
                 return a.isFolder
@@ -182,6 +218,7 @@ final class AppViewModel {
             browserFolders = []
             browserError = nil
             selectedObjectIDs = []
+            invalidateBrowserCache()
             Task { await ThumbnailCache.shared.clearMemory() }
             loadCurrentFolder()
         } else {
@@ -211,6 +248,7 @@ final class AppViewModel {
         browserFolders = []
         browserError = nil
         selectedObjectIDs = []
+        invalidateBrowserCache()
         Task { await ThumbnailCache.shared.clearMemory() }
         loadCurrentFolder()
     }
@@ -230,71 +268,213 @@ final class AppViewModel {
     var canGoBack: Bool { !backStack.isEmpty }
     var canGoForward: Bool { !forwardStack.isEmpty }
 
+    @MainActor
     func loadCurrentFolder() {
         guard let credentials else {
             browserError = "Please configure R2 credentials in Settings."
             return
         }
-        isBrowsing = true
+        let requestedPrefix = currentPrefix
+        let cacheKey = browserCacheKey(credentialsID: credentials.id, prefix: requestedPrefix)
+        let cachedEntry = browserFolderCache[cacheKey]
+        browserLoadTask?.cancel()
+        browserLoadGeneration += 1
+        let requestGeneration = browserLoadGeneration
+        if let cachedEntry {
+            browserObjects = cachedEntry.objects
+            browserFolders = cachedEntry.folders
+            isBrowsing = false
+            refreshBrowserSearch()
+        } else {
+            browserObjects = []
+            browserFolders = []
+            isBrowsing = true
+        }
         browserError = nil
-        Task {
+        browserLoadTask = Task {
             do {
                 let result = try await R2BrowseService.listObjects(
                     credentials: credentials,
-                    prefix: currentPrefix
+                    prefix: requestedPrefix
                 )
-                browserObjects = result.objects
-                    .filter { !$0.key.hasSuffix("/") }   // skip zero-byte folder markers
-                browserFolders = result.folders
-                isBrowsing = false
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard requestGeneration == self.browserLoadGeneration, requestedPrefix == self.currentPrefix else { return }
+                    let objects = result.objects
+                        .filter { !$0.key.hasSuffix("/") }   // skip zero-byte folder markers
+                    let folders = result.folders
+                    self.browserObjects = objects
+                    self.browserFolders = folders
+                    self.browserFolderCache[cacheKey] = BrowserFolderCacheEntry(objects: objects, folders: folders)
+                    self.isBrowsing = false
+                    self.refreshBrowserSearch()
+                }
+            } catch is CancellationError {
+                return
             } catch {
-                browserError = error.localizedDescription
-                isBrowsing = false
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard requestGeneration == self.browserLoadGeneration, requestedPrefix == self.currentPrefix else { return }
+                    if cachedEntry == nil {
+                        self.browserError = error.localizedDescription
+                    }
+                    self.isBrowsing = false
+                    self.refreshBrowserSearch()
+                }
             }
         }
     }
 
+    @MainActor
     func navigateToFolder(_ object: R2Object) {
-        backStack.append(currentPrefix)
-        forwardStack.removeAll()
-        currentPrefix = object.key
-        selectedObjectIDs = []
-        loadCurrentFolder()
+        guard object.isFolder else { return }
+        navigate(to: object.key, history: .pushCurrentClearForward)
     }
 
     /// Navigate to a path segment by index into `pathSegments`.
+    @MainActor
     func navigateToSegment(_ index: Int) {
         let segments = pathSegments
         guard index < segments.count else { return }
         let newSegments = Array(segments.prefix(index + 1))
         let newPrefix = newSegments.joined(separator: "/") + "/"
-        guard newPrefix != currentPrefix else { return }
-        backStack.append(currentPrefix)
-        forwardStack.removeAll()
-        currentPrefix = newPrefix
-        loadCurrentFolder()
+        navigate(to: newPrefix, history: .pushCurrentClearForward)
     }
 
+    @MainActor
     func navigateToRoot() {
-        guard !currentPrefix.isEmpty else { return }
-        backStack.append(currentPrefix)
-        forwardStack.removeAll()
-        currentPrefix = ""
-        loadCurrentFolder()
+        navigate(to: "", history: .pushCurrentClearForward)
     }
 
+    @MainActor
     func navigateBack() {
         guard let previous = backStack.popLast() else { return }
-        forwardStack.append(currentPrefix)
-        currentPrefix = previous
-        loadCurrentFolder()
+        navigate(to: previous, history: .pushCurrentToForward)
     }
 
+    @MainActor
     func navigateForward() {
         guard let next = forwardStack.popLast() else { return }
-        backStack.append(currentPrefix)
-        currentPrefix = next
+        navigate(to: next, history: .pushCurrentToBack)
+    }
+
+    @MainActor
+    private func navigate(to newPrefix: String, history: BrowserHistoryMutation) {
+        guard newPrefix != currentPrefix else { return }
+
+        switch history {
+        case .pushCurrentClearForward:
+            backStack.append(currentPrefix)
+            forwardStack.removeAll()
+        case .pushCurrentToForward:
+            forwardStack.append(currentPrefix)
+        case .pushCurrentToBack:
+            backStack.append(currentPrefix)
+        }
+
+        browserError = nil
+        selectedObjectIDs = []
+        currentPrefix = newPrefix
         loadCurrentFolder()
+        refreshBrowserSearch()
+    }
+
+    private enum BrowserHistoryMutation {
+        case pushCurrentClearForward
+        case pushCurrentToForward
+        case pushCurrentToBack
+    }
+
+    private struct BrowserFolderCacheEntry {
+        let objects: [R2Object]
+        let folders: [R2Object]
+    }
+
+    private func browserCacheKey(credentialsID: UUID, prefix: String) -> String {
+        "\(credentialsID.uuidString)::\(prefix)"
+    }
+
+    private func matchesSearchQuery(_ object: R2Object, query: String) -> Bool {
+        object.name.localizedCaseInsensitiveContains(query)
+            || object.key.localizedCaseInsensitiveContains(query)
+    }
+
+    private func invalidateBrowserCache() {
+        browserFolderCache.removeAll()
+        browserSearchCache.removeAll()
+        browserSearchResults = []
+        browserSearchPrefix = nil
+        browserSearchTask?.cancel()
+        isSearching = false
+    }
+
+    private func refreshBrowserSearch() {
+        browserSearchTask?.cancel()
+
+        let query = filterText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            browserSearchResults = []
+            browserSearchPrefix = nil
+            isSearching = false
+            return
+        }
+
+        guard let credentials else {
+            browserSearchResults = []
+            browserSearchPrefix = nil
+            isSearching = false
+            return
+        }
+
+        let searchPrefix = currentPrefix
+        let directMatches = (browserFolders + browserObjects).filter { matchesSearchQuery($0, query: query) }
+        let cacheKey = browserCacheKey(credentialsID: credentials.id, prefix: searchPrefix)
+
+        browserSearchResults = directMatches
+        browserSearchPrefix = searchPrefix
+
+        if let cachedObjects = browserSearchCache[cacheKey] {
+            guard searchPrefix == currentPrefix, query == filterText.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+            browserSearchResults = cachedObjects.filter { matchesSearchQuery($0, query: query) }
+            browserSearchPrefix = searchPrefix
+            isSearching = false
+            return
+        }
+
+        isSearching = true
+
+        browserSearchTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let subtreeObjects = try await Self.listAllObjectsWithDetails(
+                    credentials: credentials,
+                    prefix: searchPrefix
+                )
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard self.currentPrefix == searchPrefix else { return }
+                    let currentQuery = self.filterText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard currentQuery == query else { return }
+                    self.browserSearchCache[cacheKey] = subtreeObjects
+                    self.browserSearchResults = subtreeObjects.filter {
+                        self.matchesSearchQuery($0, query: currentQuery)
+                    }
+                    self.browserSearchPrefix = searchPrefix
+                    self.isSearching = false
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard self.currentPrefix == searchPrefix else { return }
+                    let currentQuery = self.filterText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard currentQuery == query else { return }
+                    self.browserSearchPrefix = searchPrefix
+                    self.isSearching = false
+                }
+            }
+        }
     }
 
     func createFolder(name: String) async {
@@ -302,6 +482,7 @@ final class AppViewModel {
         let folderKey = currentPrefix + name + "/"
         do {
             try await R2BrowseService.createFolder(credentials: credentials, folderKey: folderKey)
+            invalidateBrowserCache()
             loadCurrentFolder()
         } catch {
             showError("Failed to create folder: \(error.localizedDescription)")
@@ -316,6 +497,7 @@ final class AppViewModel {
             } else {
                 try await R2BrowseService.deleteObject(credentials: credentials, key: object.key)
             }
+            invalidateBrowserCache()
             loadCurrentFolder()
         } catch {
             showError("Failed to delete: \(error.localizedDescription)")
@@ -341,6 +523,7 @@ final class AppViewModel {
                 }
             }
         }
+        invalidateBrowserCache()
         loadCurrentFolder()
     }
 
@@ -411,6 +594,7 @@ final class AppViewModel {
                     let fileSize = Int64(values?.fileSize ?? 0)
 
                     let task = FileUploadTask(fileURL: fileURL, fileName: fileName, fileSize: fileSize)
+                    configureUploadTask(task)
                     task.uploadKey = r2Key
                     task.parentFolderBookmark = folderBookmark
                     tasks.append(task)
@@ -422,6 +606,7 @@ final class AppViewModel {
                 let r2Key = currentPrefix + fileName
 
                 let task = FileUploadTask(fileURL: url, fileName: fileName, fileSize: fileSize)
+                configureUploadTask(task)
                 task.uploadKey = r2Key
                 tasks.append(task)
             }
@@ -433,6 +618,7 @@ final class AppViewModel {
             let r2Key = currentPrefix + fileName
 
             let task = FileUploadTask(fileURL: url, fileName: fileName, fileSize: fileSize)
+            configureUploadTask(task)
             task.uploadKey = r2Key
             tasks.append(task)
 #endif
@@ -440,6 +626,7 @@ final class AppViewModel {
 
         guard !tasks.isEmpty else { return }
         uploadTasks.append(contentsOf: tasks)
+        syncUploadLiveActivity()
         Task { await uploadPendingTasks() }
     }
 
@@ -465,6 +652,7 @@ final class AppViewModel {
                                                  relativeTo: nil)
 
             let task = FileUploadTask(fileURL: url, fileName: fileName, fileSize: fileSize)
+            configureUploadTask(task)
             task.fileBookmark = bookmark
             if !currentPrefix.isEmpty {
                 task.uploadKey = currentPrefix + fileName
@@ -478,6 +666,7 @@ final class AppViewModel {
             let fileSize = Int64(resourceValues?.fileSize ?? 0)
 
             let task = FileUploadTask(fileURL: url, fileName: fileName, fileSize: fileSize)
+            configureUploadTask(task)
             if !currentPrefix.isEmpty {
                 task.uploadKey = currentPrefix + fileName
             }
@@ -487,6 +676,7 @@ final class AppViewModel {
 
         guard !tasks.isEmpty else { return }
         uploadTasks.append(contentsOf: tasks)
+        syncUploadLiveActivity()
         Task { await uploadPendingTasks() }
     }
 
@@ -634,6 +824,7 @@ final class AppViewModel {
                 uploadTask.resultURL = publicURL
                 uploadTask.progress = 1.0
                 uploadTask.status = .completed
+                invalidateBrowserCache()
                 loadCurrentFolder()
 
                 let item = UploadItem(
@@ -676,6 +867,16 @@ final class AppViewModel {
     }
 
     func downloadToDestination(from remoteURL: URL, dest: URL) {
+#if os(iOS)
+        BackgroundDownloadService.shared.download(
+            from: remoteURL,
+            to: dest,
+            onSuccess: { _ in },
+            onFailure: { [weak self] error in
+                self?.showError("Download failed: \(error.localizedDescription)")
+            }
+        )
+#else
         Task {
             do {
                 let (tmpURL, _) = try await URLSession.shared.download(from: remoteURL)
@@ -685,6 +886,7 @@ final class AppViewModel {
                 await MainActor.run { showError("Download failed: \(error.localizedDescription)") }
             }
         }
+#endif
     }
 
     /// Downloads a history item to the user's Downloads folder via a presigned URL.
@@ -706,8 +908,107 @@ final class AppViewModel {
         // Delete from R2 in background
         Task {
             try? await R2BrowseService.deleteObject(credentials: credentials, key: item.r2Key)
-            loadCurrentFolder()
+            await MainActor.run {
+                invalidateBrowserCache()
+                loadCurrentFolder()
+            }
         }
+    }
+
+    // MARK: - Dashboard / Bucket Scan
+
+    func scanBucket() {
+        guard let credentials else {
+            scanError = "No credentials configured."
+            return
+        }
+        isScanning = true
+        scanError = nil
+        Task {
+            do {
+                let result = try await R2BrowseService.listObjects(credentials: credentials, prefix: "")
+                let rootFolders = result.folders
+
+                // Also do a full recursive listing for complete stats
+                let allKeys = try await Self.listAllObjectsWithDetails(credentials: credentials)
+
+                var stats = BucketStats()
+                stats.totalFolders = rootFolders.count
+                stats.totalFiles = allKeys.count
+                stats.totalSize = allKeys.reduce(0) { $0 + $1.size }
+
+                // Categorize files
+                for file in allKeys {
+                    let ext = (file.key as NSString).pathExtension
+                    let category = BucketStats.FileCategory.categorize(extension: ext)
+                    var catStats = stats.filesByType[category] ?? BucketStats.CategoryStats()
+                    catStats.count += 1
+                    catStats.totalSize += file.size
+                    stats.filesByType[category] = catStats
+                }
+
+                // Top 10 largest files
+                stats.largestFiles = allKeys
+                    .sorted { $0.size > $1.size }
+                    .prefix(10)
+                    .map { BucketStats.FileInfo(key: $0.key, size: $0.size, lastModified: $0.lastModified) }
+
+                // 5 most recent files
+                stats.recentFiles = allKeys
+                    .sorted { ($0.lastModified ?? .distantPast) > ($1.lastModified ?? .distantPast) }
+                    .prefix(5)
+                    .map { BucketStats.FileInfo(key: $0.key, size: $0.size, lastModified: $0.lastModified) }
+
+                stats.lastScanned = Date()
+                bucketStats = stats
+                isScanning = false
+            } catch {
+                scanError = error.localizedDescription
+                isScanning = false
+            }
+        }
+    }
+
+    /// Lists all objects recursively with size and date details using paginated ListObjectsV2 (no delimiter).
+    private static func listAllObjectsWithDetails(credentials: R2Credentials, prefix: String = "") async throws -> [R2Object] {
+        var allObjects: [R2Object] = []
+        var continuationToken: String? = nil
+
+        repeat {
+            let baseURL = credentials.endpoint.appendingPathComponent(credentials.bucketName)
+            var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+            var queryItems: [URLQueryItem] = [
+                URLQueryItem(name: "list-type", value: "2"),
+            ]
+            if !prefix.isEmpty {
+                queryItems.append(URLQueryItem(name: "prefix", value: prefix))
+            }
+            if let token = continuationToken {
+                queryItems.append(URLQueryItem(name: "continuation-token", value: token))
+            }
+            comps.queryItems = queryItems
+
+            guard let url = comps.url else { throw URLError(.badURL) }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            let signed = AWSV4Signer.sign(request: request, credentials: credentials,
+                                          payloadHash: AWSV4Signer.sha256Hex(""))
+
+            let (data, response) = try await URLSession.shared.data(for: signed)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let body = String(data: data, encoding: .utf8) ?? ""
+                throw R2BrowseError.httpError(code, body)
+            }
+
+            let parser = FullListParser()
+            let result = try parser.parse(data: data)
+            allObjects.append(contentsOf: result.objects.filter { !$0.key.hasSuffix("/") })
+            continuationToken = result.isTruncated ? result.nextContinuationToken : nil
+        } while continuationToken != nil
+
+        return allObjects
     }
 
     // MARK: - Updates
@@ -750,6 +1051,7 @@ final class AppViewModel {
     @MainActor
     func removeCompletedAndFailed() {
         uploadTasks.removeAll { $0.status == .completed || $0.status == .failed }
+        syncUploadLiveActivity()
     }
 
     // MARK: - Helpers
@@ -757,6 +1059,20 @@ final class AppViewModel {
     private func showError(_ message: String) {
         alertMessage = message
         showAlert = true
+    }
+
+    private func configureUploadTask(_ task: FileUploadTask) {
+        task.onStateChange = { [weak self] in
+            self?.syncUploadLiveActivity()
+        }
+    }
+
+    private func syncUploadLiveActivity() {
+#if os(iOS)
+        if #available(iOS 16.1, *) {
+            UploadLiveActivityService.shared.sync(tasks: uploadTasks)
+        }
+#endif
     }
 
     private func mimeType(for url: URL) -> String {

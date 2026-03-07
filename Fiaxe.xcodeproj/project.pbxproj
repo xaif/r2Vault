@@ -6,7 +6,36 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8AF0DD3E07534A5CB4FB01F4 /* FiaxeLiveActivityExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B45988559F5E4BAFA2B2EBA7 /* FiaxeLiveActivityExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		DF74AB7F48E743DBBDF6EBE8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B554C0022F54C45F0042921F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 681835841D76415BB3BDFF98;
+			remoteInfo = FiaxeLiveActivityExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8BFE32BB1C1044D4A78E6D5D /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				8AF0DD3E07534A5CB4FB01F4 /* FiaxeLiveActivityExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		B45988559F5E4BAFA2B2EBA7 /* FiaxeLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FiaxeLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B554C00A2F54C45F0042921F /* R2Vault.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = R2Vault.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -16,10 +45,22 @@
 			path = Fiaxe;
 			sourceTree = "<group>";
 		};
+		E4AD555212484A8283D19702 /* FiaxeLiveActivityExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FiaxeLiveActivityExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		B554C0072F54C45F0042921F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E411370647C34BB593DE9251 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				B554C00C2F54C45F0042921F /* Fiaxe */,
+				E4AD555212484A8283D19702 /* FiaxeLiveActivityExtension */,
 				B554C00B2F54C45F0042921F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				B554C00A2F54C45F0042921F /* R2Vault.app */,
+				B45988559F5E4BAFA2B2EBA7 /* FiaxeLiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,6 +91,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		681835841D76415BB3BDFF98 /* FiaxeLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BBA1877E4CB64D969A7E4B95 /* Build configuration list for PBXNativeTarget "FiaxeLiveActivityExtension" */;
+			buildPhases = (
+				15B3FF186D32468F8B19E01D /* Sources */,
+				E411370647C34BB593DE9251 /* Frameworks */,
+				28C3A762AC88482DB5FF656D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E4AD555212484A8283D19702 /* FiaxeLiveActivityExtension */,
+			);
+			name = FiaxeLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = FiaxeLiveActivityExtension;
+			productReference = B45988559F5E4BAFA2B2EBA7 /* FiaxeLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		B554C0092F54C45F0042921F /* Fiaxe */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B554C0152F54C45F0042921F /* Build configuration list for PBXNativeTarget "Fiaxe" */;
@@ -56,10 +121,12 @@
 				B554C0062F54C45F0042921F /* Sources */,
 				B554C0072F54C45F0042921F /* Frameworks */,
 				B554C0082F54C45F0042921F /* Resources */,
+				8BFE32BB1C1044D4A78E6D5D /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AFC414EA26944F9E92339802 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				B554C00C2F54C45F0042921F /* Fiaxe */,
@@ -81,6 +148,9 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
+					681835841D76415BB3BDFF98 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					B554C0092F54C45F0042921F = {
 						CreatedOnToolsVersion = 26.3;
 					};
@@ -101,11 +171,19 @@
 			projectRoot = "";
 			targets = (
 				B554C0092F54C45F0042921F /* Fiaxe */,
+				681835841D76415BB3BDFF98 /* FiaxeLiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		28C3A762AC88482DB5FF656D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B554C0082F54C45F0042921F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,6 +215,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		15B3FF186D32468F8B19E01D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B554C0062F54C45F0042921F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -146,7 +231,39 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		AFC414EA26944F9E92339802 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = 681835841D76415BB3BDFF98 /* FiaxeLiveActivityExtension */;
+			targetProxy = DF74AB7F48E743DBBDF6EBE8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		7C0CD9E324C748B0A09F8CF0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 9;
+				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/FiaxeLiveActivityExtension-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.2.9;
+				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.Fiaxe.LiveActivityExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Debug;
+		};
 		B554C0132F54C45F0042921F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -277,6 +394,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "R2Vault uses photo library access to preserve original photo and video filenames for uploads.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -291,7 +410,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.2.8;
+				MARKETING_VERSION = 1.2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.Fiaxe;
 				PRODUCT_NAME = R2Vault;
 				REGISTER_APP_GROUPS = YES;
@@ -324,6 +443,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "R2Vault uses photo library access to preserve original photo and video filenames for uploads.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -338,7 +459,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.2.8;
+				MARKETING_VERSION = 1.2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.Fiaxe;
 				PRODUCT_NAME = R2Vault;
 				REGISTER_APP_GROUPS = YES;
@@ -353,6 +474,29 @@
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				VERSIONING_SYSTEM = "apple-generic";
 				XROS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Release;
+		};
+		EC503EBDC1104254A5EA269A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 9;
+				DEVELOPMENT_TEAM = 38DQ2F7Q9D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/FiaxeLiveActivityExtension-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.2.9;
+				PRODUCT_BUNDLE_IDENTIFIER = fiaxe.Fiaxe.LiveActivityExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Release;
 		};
@@ -373,6 +517,15 @@
 			buildConfigurations = (
 				B554C0162F54C45F0042921F /* Debug */,
 				B554C0172F54C45F0042921F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BBA1877E4CB64D969A7E4B95 /* Build configuration list for PBXNativeTarget "FiaxeLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7C0CD9E324C748B0A09F8CF0 /* Debug */,
+				EC503EBDC1104254A5EA269A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

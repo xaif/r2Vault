@@ -31,23 +31,24 @@ struct R2ObjectRow: View {
 
 #if os(iOS)
     private var iOSRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: iosIconName)
-                .font(.system(size: 22, weight: .medium))
+                .font(.system(size: 24, weight: .medium))
                 .foregroundStyle(iosIconColor)
-                .frame(width: 28, alignment: .center)
+                .frame(width: 32, alignment: .center)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(object.name)
                     .lineLimit(1)
-                    .font(.body.weight(.medium))
+                    .font(.system(size: 17, weight: .medium))
                 if object.isFolder {
-                    Text(object.formattedDate)
-                        .font(.caption)
+                    Text(folderSubtitle)
+                        .font(.system(size: 13))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 } else {
                     Text("\(object.formattedSize) · \(object.formattedDate)")
-                        .font(.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -56,11 +57,11 @@ struct R2ObjectRow: View {
 
             if object.isFolder {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .contentShape(Rectangle())
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
@@ -74,22 +75,19 @@ struct R2ObjectRow: View {
                     guard !isDownloading,
                           let remoteURL = AWSV4Signer.presignedURL(for: object.key, credentials: credentials) else { return }
                     isDownloading = true
-                    Task {
-                        do {
-                            let (tmpURL, _) = try await URLSession.shared.download(from: remoteURL)
-                            // Move to a named temp file so the share sheet shows the right filename
-                            let named = FileManager.default.temporaryDirectory
-                                .appendingPathComponent(object.name)
-                            try? FileManager.default.removeItem(at: named)
-                            try FileManager.default.moveItem(at: tmpURL, to: named)
-                            await MainActor.run {
-                                shareItem = named
-                                isDownloading = false
-                            }
-                        } catch {
-                            await MainActor.run { isDownloading = false }
+                    let named = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(object.name)
+                    BackgroundDownloadService.shared.download(
+                        from: remoteURL,
+                        to: named,
+                        onSuccess: { localURL in
+                            shareItem = localURL
+                            isDownloading = false
+                        },
+                        onFailure: { _ in
+                            isDownloading = false
                         }
-                    }
+                    )
                 } label: {
                     if isDownloading {
                         Label("Downloading…", systemImage: "arrow.down.circle")
@@ -132,7 +130,7 @@ struct R2ObjectRow: View {
             ShareSheet(url: shareable.url)
                 .presentationDetents([.medium, .large])
         }
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
         .listRowBackground(Color.clear)
     }
 #endif
@@ -323,6 +321,16 @@ struct R2ObjectRow: View {
 
     private var iosIconColor: Color {
         .accentColor
+    }
+
+    private var folderSubtitle: String {
+        guard let lastModified = object.lastModified else {
+            return "Folder"
+        }
+
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return "Folder · \(formatter.localizedString(for: lastModified, relativeTo: Date()))"
     }
 #endif
 }

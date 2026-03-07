@@ -8,10 +8,19 @@ final class FileUploadTask: Identifiable {
     let fileSize: Int64
     let fileURL: URL
 
-    var progress: Double = 0  // 0.0 – 1.0
-    var status: Status = .pending
-    var errorMessage: String?
-    var resultURL: URL?
+    /// 0.0 – 1.0
+    var progress: Double = 0 {
+        didSet { notifyStateChange() }
+    }
+    var status: Status = .pending {
+        didSet { notifyStateChange() }
+    }
+    var errorMessage: String? {
+        didSet { notifyStateChange() }
+    }
+    var resultURL: URL? {
+        didSet { notifyStateChange() }
+    }
     /// When set, used as the full R2 key instead of generating a random-prefix key.
     /// Used for folder-aware uploads from the browser.
     var uploadKey: String?
@@ -30,6 +39,7 @@ final class FileUploadTask: Identifiable {
 
     /// The running upload task — held so it can be cancelled.
     var uploadTask: Task<Void, Never>?
+    var onStateChange: (() -> Void)?
 
     init(fileURL: URL, fileName: String, fileSize: Int64) {
         self.id = UUID()
@@ -42,5 +52,15 @@ final class FileUploadTask: Identifiable {
         uploadTask?.cancel()
         uploadTask = nil
         status = .cancelled
+    }
+
+    private func notifyStateChange() {
+        guard let onStateChange else { return }
+        // Call directly if already on MainActor, otherwise hop to it.
+        if Thread.isMainThread {
+            onStateChange()
+        } else {
+            Task { @MainActor in onStateChange() }
+        }
     }
 }

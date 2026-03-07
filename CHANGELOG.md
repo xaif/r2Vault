@@ -2,6 +2,27 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.9] - 2026-03-07
+
+### Added
+- iPhone Live Activity upload experience with a cleaner, more compact status design and better visual hierarchy
+- In-preview file actions for iPhone and macOS, including download, copy URL, and delete
+- Faster media/document preview paths with streamed video playback, dedicated PDF viewing, and improved image preview handling
+
+### Changed
+- iOS now opens on Files by default, while keeping Dashboard available in the main tab layout
+- Search behavior now works recursively within the current folder subtree instead of only the current visible level
+- Dashboard visuals were refreshed across iOS and macOS with stronger card styling, responsive layouts, and cleaner analytics sections
+- Upload Insights summary cards now match the primary dashboard stat-card treatment
+
+### Fixed
+- iOS downloads no longer cancel just because the app is backgrounded or minimized
+- Folder navigation races, stale-folder flashes, and repeated loading states during browser navigation
+- Dashboard timeline, alignment, and bucket-scoped upload insight issues
+- Preview issues for images and PDFs, including incorrect initial image zoom and broken preview actions
+- macOS dashboard spacing and section composition for file analytics cards
+- Removed an unused local during bucket scan to keep the release build warning-free
+
 ## [v1.2.8] - 2026-03-06
 
 ### Added

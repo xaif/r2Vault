@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 enum SidebarDestination: Hashable {
     case bucket(UUID)
     case history
+    case dashboard
     case settings
 }
 
@@ -122,6 +123,8 @@ struct ContentView: View {
                     .tag(SidebarDestination.history)
                 Label("Settings", systemImage: "gearshape")
                     .tag(SidebarDestination.settings)
+                Label("Dashboard", systemImage: "chart.bar.xaxis.ascending")
+                    .tag(SidebarDestination.dashboard)
             } header: {
                 Text("Utilities")
             }
@@ -142,6 +145,9 @@ struct ContentView: View {
         case .history:
             UploadHistoryView()
                 .navigationTitle("History")
+        case .dashboard:
+            DashboardView()
+                .navigationTitle("Dashboard")
         case .settings:
             SettingsView()
                 .navigationTitle("Settings")
@@ -159,22 +165,21 @@ struct ContentView: View {
 
     @State private var selectedTab: IOSTab = .browser
     @State private var browserPath: [String] = []
-    @State private var isSearchPresented = false
 
     private var iOSLayout: some View {
         return TabView(selection: $selectedTab) {
-            // Browser Tab — shows a bucket picker if multiple buckets are configured
-            Tab("Files", systemImage: "folder.fill", value: IOSTab.browser) {
-                iOSBrowserStack
-            }
-
-            // History Tab
-            Tab("History", systemImage: "clock.fill", value: IOSTab.history) {
+            // Dashboard Tab
+            Tab("Dashboard", systemImage: "chart.bar.xaxis.ascending", value: IOSTab.dashboard) {
                 NavigationStack {
-                    UploadHistoryView()
-                        .navigationTitle("History")
+                    DashboardView()
+                        .navigationTitle("Dashboard")
                         .navigationBarTitleDisplayMode(.large)
                 }
+            }
+
+            // Browser Tab
+            Tab("Files", systemImage: "folder.fill", value: IOSTab.browser) {
+                iOSBrowserStack
             }
 
             // Settings Tab
@@ -185,7 +190,12 @@ struct ContentView: View {
                         .navigationBarTitleDisplayMode(.large)
                 }
             }
+
+            Tab(value: IOSTab.search, role: .search) {
+                iOSSearchStack
+            }
         }
+        .tabViewSearchActivation(.searchTabSelection)
     }
 
     private var iOSBrowserStack: some View {
@@ -194,23 +204,17 @@ struct ContentView: View {
         }
     }
 
+    private var iOSSearchStack: some View {
+        NavigationStack {
+            iOSSearchContent
+        }
+    }
+
     @ViewBuilder
     private var iOSBrowserContent: some View {
         @Bindable var viewModel = viewModel
-        Group {
-            if isSearchPresented || !viewModel.filterText.isEmpty {
-                iOSBrowserTab
-                    .searchable(
-                        text: $viewModel.filterText,
-                        isPresented: $isSearchPresented,
-                        placement: .navigationBarDrawer(displayMode: .automatic),
-                        prompt: "Search"
-                    )
-            } else {
-                iOSBrowserTab
-            }
-        }
-        .navigationTitle(viewModel.credentials?.bucketName ?? "R2 Vault")
+        iOSBrowserTab
+        .navigationTitle(iOSBrowserTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: String.self) { folderKey in
             BrowserView()
@@ -218,16 +222,6 @@ struct ContentView: View {
                     .split(separator: "/", omittingEmptySubsequences: true)
                     .last.map(String.init) ?? folderKey)
                 .navigationBarTitleDisplayMode(.inline)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isSearchPresented = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                }
-                .accessibilityLabel("Search")
-            }
         }
         .overlay(alignment: .bottom) {
             VStack(spacing: 8) {
@@ -239,11 +233,6 @@ struct ContentView: View {
                     .environment(viewModel)
             }
             .padding(.bottom, 8)
-        }
-        .onChange(of: viewModel.filterText) { _, newValue in
-            if newValue.isEmpty {
-                isSearchPresented = false
-            }
         }
     }
 
@@ -276,6 +265,37 @@ struct ContentView: View {
             .listStyle(.insetGrouped)
         }
     }
+
+    private var iOSBrowserTitle: String {
+        if let last = viewModel.pathSegments.last {
+            return last
+        }
+        return viewModel.credentials?.bucketName ?? "R2 Vault"
+    }
+
+    @ViewBuilder
+    private var iOSSearchContent: some View {
+        @Bindable var viewModel = viewModel
+        iOSBrowserTab
+            .searchable(
+                text: $viewModel.filterText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search files"
+            )
+            .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.inline)
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 8) {
+                    UploadHUDView()
+                        .environment(viewModel)
+                        .padding(.horizontal, 12)
+
+                    IOSSelectionBar()
+                        .environment(viewModel)
+                }
+                .padding(.bottom, 8)
+            }
+    }
 #endif
 }
 
@@ -283,7 +303,7 @@ struct ContentView: View {
 
 #if os(iOS)
 enum IOSTab: Hashable {
-    case browser, history, settings
+    case browser, dashboard, settings, search
 }
 #endif
 

@@ -1,12 +1,16 @@
 import SwiftUI
 #if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 
 @main
 struct R2VaultApp: App {
 #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+#else
+    @UIApplicationDelegateAdaptor(IOSAppDelegate.self) var appDelegate
 #endif
     @State private var viewModel: AppViewModel
 #if os(macOS)
@@ -62,6 +66,18 @@ struct R2VaultApp: App {
 #endif
     }
 }
+
+#if os(iOS)
+final class IOSAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        BackgroundDownloadService.shared.handleBackgroundEvents(completionHandler: completionHandler)
+    }
+}
+#endif
 
 // MARK: - Open Window Handler (macOS only)
 

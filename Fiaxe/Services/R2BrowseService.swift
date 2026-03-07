@@ -318,6 +318,83 @@ private final class ListBucketResultParser: NSObject, XMLParserDelegate, @unchec
     }
 }
 
+// MARK: - Full List Parser (no delimiter — returns R2Objects with size/date)
+
+struct FullListParseResult: Sendable {
+    var objects: [R2Object]
+    var isTruncated: Bool
+    var nextContinuationToken: String?
+}
+
+final class FullListParser: NSObject, XMLParserDelegate, @unchecked Sendable {
+    private var objects: [R2Object] = []
+    private var isTruncated = false
+    private var nextContinuationToken: String?
+    private var currentElement = ""
+    private var currentText = ""
+    private var inContents = false
+    private var currentKey: String?
+    private var currentSize: Int64 = 0
+    private var currentLastModified: Date?
+
+    private let iso8601: ISO8601DateFormatter = {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fmt
+    }()
+
+    func parse(data: Data) throws -> FullListParseResult {
+        let parser = XMLParser(data: data)
+        parser.delegate = self
+        guard parser.parse() else {
+            throw R2BrowseError.parseError(parser.parserError?.localizedDescription ?? "Parse error")
+        }
+        return FullListParseResult(objects: objects, isTruncated: isTruncated, nextContinuationToken: nextContinuationToken)
+    }
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
+                qualifiedName qName: String?, attributes: [String: String] = [:]) {
+        currentElement = elementName
+        currentText = ""
+        if elementName == "Contents" { inContents = true }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        currentText += string
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,
+                qualifiedName qName: String?) {
+        let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch elementName {
+        case "Contents":
+            if let key = currentKey {
+                objects.append(R2Object(key: key, size: currentSize, lastModified: currentLastModified, isFolder: false))
+            }
+            inContents = false
+            currentKey = nil
+            currentSize = 0
+            currentLastModified = nil
+        case "Key":
+            if inContents { currentKey = text }
+        case "Size":
+            if inContents { currentSize = Int64(text) ?? 0 }
+        case "LastModified":
+            if inContents {
+                currentLastModified = iso8601.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+            }
+        case "IsTruncated":
+            isTruncated = text.lowercased() == "true"
+        case "NextContinuationToken":
+            nextContinuationToken = text
+        default:
+            break
+        }
+        currentElement = ""
+        currentText = ""
+    }
+}
+
 // MARK: - Flat List Parser (no delimiter — for recursive enumeration)
 
 private struct FlatListResult {

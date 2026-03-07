@@ -1,6 +1,13 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+import AVKit
+import PDFKit
+#endif
 #if os(iOS)
+import AVKit
+import PDFKit
 import PhotosUI
 import QuickLook
 import UIKit
@@ -15,11 +22,16 @@ struct BrowserView: View {
     @State private var isDropTargeted = false
     @State private var showDeleteConfirm = false
     @State private var pendingDeleteItem: R2Object? = nil
+#if os(macOS)
+    @State private var macPreviewItem: MacRemoteDocumentPreview?
+#endif
 #if os(iOS)
     @State private var photosPickerSelection: [PhotosPickerItem] = []
     @State private var swipeOffset: CGFloat = 0
     @State private var swipeDirection: SwipeDirection = .none
     @State private var previewItem: PreviewFile? = nil
+    @State private var mediaPreviewItem: StreamingMediaPreview? = nil
+    @State private var documentPreviewItem: RemoteDocumentPreview? = nil
     @State private var isPreparingPreview = false
     @State private var previewLoadingName: String? = nil
     @State private var navigationAnimationDirection: NavigationAnimationDirection = .forward
@@ -61,8 +73,9 @@ struct BrowserView: View {
                         .transition(folderNavigationTransition)
                 }
                 .clipped()
-                    .offset(x: swipeOffset)
-                    .simultaneousGesture(edgeSwipeGesture)
+                .offset(x: swipeOffset)
+                .simultaneousGesture(edgeSwipeGesture)
+                .allowsHitTesting(!isNavigatingFolders && !isPreparingPreview)
                 if isNavigatingFolders {
                     folderLoadingOverlay
                 }
@@ -76,7 +89,9 @@ struct BrowserView: View {
             // Status bar
             statusBar
         }
+#if os(macOS)
         .searchable(text: $vm.filterText, placement: .toolbar, prompt: "Search")
+#endif
         .toolbar { toolbarContent }
         .onAppear {
             if viewModel.browserObjects.isEmpty && viewModel.browserFolders.isEmpty && !viewModel.isBrowsing {
@@ -89,10 +104,34 @@ struct BrowserView: View {
                 swipeOffset = 0
             }
         }
-        .animation(.easeInOut(duration: 0.26), value: viewModel.currentPrefix)
+        .animation(folderNavigationAnimation, value: viewModel.currentPrefix)
         .sheet(item: $previewItem, onDismiss: deletePreviewFileIfNeeded) { item in
             QuickLookPreviewSheet(url: item.url)
                 .ignoresSafeArea()
+        }
+        .fullScreenCover(item: $mediaPreviewItem, onDismiss: stopStreamingPreview) { item in
+            StreamingMediaPlayerView(item: item)
+                .ignoresSafeArea()
+        }
+        .sheet(item: $documentPreviewItem, onDismiss: stopDocumentPreview) { item in
+            RemoteDocumentPreviewView(
+                item: item,
+                onDelete: { object in
+                    stopDocumentPreview()
+                    Task { await viewModel.deleteObject(object) }
+                }
+            )
+                .ignoresSafeArea()
+        }
+#else
+        .sheet(item: $macPreviewItem) { item in
+            MacRemoteDocumentPreviewView(
+                item: item,
+                onDelete: { object in
+                    macPreviewItem = nil
+                    Task { await viewModel.deleteObject(object) }
+                }
+            )
         }
 #endif
         .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
@@ -263,10 +302,7 @@ struct BrowserView: View {
                         if item.isFolder {
                             viewModel.navigateToFolder(item)
                         } else {
-                            QuickLookCoordinator.shared.preview(
-                                item,
-                                credentials: viewModel.credentials ?? .empty
-                            )
+                            previewFileOnMac(item)
                         }
                     }
                     .onTapGesture(count: 1) {
@@ -321,7 +357,7 @@ struct BrowserView: View {
                         onCopyURL: { viewModel.copyToClipboard($0) },
                         onPreview: {
 #if os(macOS)
-                            QuickLookCoordinator.shared.preview($0, credentials: viewModel.credentials ?? .empty)
+                            previewFileOnMac($0)
 #else
                             _ = $0
 #endif
@@ -514,7 +550,7 @@ struct BrowserView: View {
         } else {
 #if os(macOS)
             Button {
-                QuickLookCoordinator.shared.preview(item, credentials: viewModel.credentials ?? .empty)
+                previewFileOnMac(item)
             } label: {
                 Label("Preview", systemImage: "eye")
             }
@@ -811,6 +847,41 @@ struct BrowserView: View {
     private func navigateToRootAnimated() {
         viewModel.navigateToRoot()
     }
+
+    private func previewFileOnMac(_ object: R2Object) {
+        guard !object.isFolder,
+              let credentials = viewModel.credentials,
+              let remoteURL = AWSV4Signer.presignedURL(for: object.key, credentials: credentials) else {
+            return
+        }
+
+        switch macPreviewKind(for: object) {
+        case .quickLook:
+            QuickLookCoordinator.shared.preview(object, credentials: credentials)
+        default:
+            macPreviewItem = MacRemoteDocumentPreview(
+                object: object,
+                downloadURL: remoteURL,
+                publicURL: credentials.publicURL(forKey: object.key),
+                kind: macPreviewKind(for: object)
+            )
+        }
+    }
+
+    private func macPreviewKind(for object: R2Object) -> MacRemoteDocumentPreview.Kind {
+        let ext = (object.key as NSString).pathExtension.lowercased()
+        guard let type = UTType(filenameExtension: ext) else { return .quickLook }
+        if type.conforms(to: .movie) || type.conforms(to: .video) || type.conforms(to: .audio) {
+            return .media
+        }
+        if type.conforms(to: .image) {
+            return .image
+        }
+        if type.conforms(to: .pdf) {
+            return .pdf
+        }
+        return .quickLook
+    }
 #endif
 
 #if os(iOS)
@@ -822,15 +893,23 @@ struct BrowserView: View {
         switch navigationAnimationDirection {
         case .forward:
             return .asymmetric(
-                insertion: .move(edge: .trailing),
-                removal: .move(edge: .leading)
+                insertion: .offset(x: 18)
+                    .combined(with: .opacity),
+                removal: .offset(x: -18)
+                    .combined(with: .opacity)
             )
         case .back:
             return .asymmetric(
-                insertion: .move(edge: .leading),
-                removal: .move(edge: .trailing)
+                insertion: .offset(x: -18)
+                    .combined(with: .opacity),
+                removal: .offset(x: 18)
+                    .combined(with: .opacity)
             )
         }
+    }
+
+    private var folderNavigationAnimation: Animation {
+        .easeInOut(duration: 0.2)
     }
 
     private func navigateToFolderAnimated(_ object: R2Object) {
@@ -890,12 +969,64 @@ struct BrowserView: View {
 
     private func previewFile(_ object: R2Object) {
         guard !object.isFolder,
-              !isPreparingPreview,
               let credentials = viewModel.credentials,
               let remoteURL = AWSV4Signer.presignedURL(for: object.key, credentials: credentials) else {
             return
         }
 
+        switch previewMode(for: object) {
+        case .streamingMedia:
+            stopDocumentPreview()
+            deletePreviewFileIfNeeded()
+            mediaPreviewItem = StreamingMediaPreview(url: remoteURL, title: object.name)
+        case .remoteDocument(let kind):
+            stopStreamingPreview()
+            deletePreviewFileIfNeeded()
+            documentPreviewItem = RemoteDocumentPreview(
+                object: object,
+                downloadURL: remoteURL,
+                publicURL: credentials.publicURL(forKey: object.key),
+                title: object.name,
+                kind: kind
+            )
+        case .quickLook:
+            stopStreamingPreview()
+            stopDocumentPreview()
+            previewLoadingName = nil
+            previewItem = PreviewFile(url: remoteURL)
+        case .downloadThenPreview:
+            guard !isPreparingPreview else { return }
+            stopStreamingPreview()
+            stopDocumentPreview()
+            deletePreviewFileIfNeeded()
+            prepareDownloadedPreview(for: object, remoteURL: remoteURL)
+        }
+    }
+
+    private func previewMode(for object: R2Object) -> PreviewMode {
+        let ext = (object.key as NSString).pathExtension.lowercased()
+        if let type = UTType(filenameExtension: ext) {
+            if type.conforms(to: .movie) || type.conforms(to: .video) || type.conforms(to: .audio) {
+                return .streamingMedia
+            }
+            if type.conforms(to: .image) {
+                return .remoteDocument(.image)
+            }
+            if type.conforms(to: .pdf) {
+                return .remoteDocument(.pdf)
+            }
+            if type.conforms(to: .text)
+                || type.conforms(to: .spreadsheet)
+                || type.conforms(to: .presentation)
+                || type.conforms(to: .archive)
+                || type.conforms(to: .data) {
+                return .downloadThenPreview
+            }
+        }
+        return .downloadThenPreview
+    }
+
+    private func prepareDownloadedPreview(for object: R2Object, remoteURL: URL) {
         previewLoadingName = object.name
         withAnimation(.easeInOut(duration: 0.2)) {
             isPreparingPreview = true
@@ -931,10 +1062,19 @@ struct BrowserView: View {
     }
 
     private func deletePreviewFileIfNeeded() {
-        guard let url = previewItem?.url else { return }
-        try? FileManager.default.removeItem(at: url)
+        if let url = previewItem?.url, url.isFileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
         previewItem = nil
         previewLoadingName = nil
+    }
+
+    private func stopStreamingPreview() {
+        mediaPreviewItem = nil
+    }
+
+    private func stopDocumentPreview() {
+        documentPreviewItem = nil
     }
 
     private var previewLoadingOverlay: some View {
@@ -968,6 +1108,7 @@ struct BrowserView: View {
         ZStack {
             Color.black.opacity(0.08)
                 .ignoresSafeArea()
+                .blur(radius: 2)
 
             VStack(spacing: 10) {
                 ProgressView()
@@ -980,9 +1121,9 @@ struct BrowserView: View {
             .padding(.vertical, 14)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.1), radius: 14, x: 0, y: 8)
+            .scaleEffect(0.98)
         }
-        .allowsHitTesting(false)
-        .transition(.opacity)
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
 #endif
 }
@@ -1061,12 +1202,248 @@ extension R2Credentials {
     static let empty = R2Credentials(accountId: "", accessKeyId: "", secretAccessKey: "", bucketName: "")
 }
 
+#if os(macOS)
+private struct MacRemoteDocumentPreview: Identifiable {
+    enum Kind {
+        case image
+        case pdf
+        case media
+        case quickLook
+    }
+
+    let id = UUID()
+    let object: R2Object
+    let downloadURL: URL
+    let publicURL: URL
+    let kind: Kind
+}
+
+private struct MacRemoteDocumentPreviewView: View {
+    let item: MacRemoteDocumentPreview
+    let onDelete: (R2Object) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isDownloading = false
+    @State private var showDeleteConfirm = false
+    @State private var didCopyURL = false
+    @State private var player: AVPlayer?
+
+    private func startDownload() {
+        guard !isDownloading else { return }
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = item.object.name
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        isDownloading = true
+        Task {
+            do {
+                let (temporaryURL, _) = try await URLSession.shared.download(from: item.downloadURL)
+                try? FileManager.default.removeItem(at: destination)
+                try FileManager.default.moveItem(at: temporaryURL, to: destination)
+                await MainActor.run {
+                    isDownloading = false
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloading = false
+                }
+            }
+        }
+    }
+
+    private func copyURL() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(item.publicURL.absoluteString, forType: .string)
+        withAnimation(.easeInOut(duration: 0.18)) {
+            didCopyURL = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                didCopyURL = false
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Group {
+                switch item.kind {
+                case .image:
+                    AsyncImage(url: item.downloadURL) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                                .controlSize(.large)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(24)
+                        case .failure:
+                            ContentUnavailableView(
+                                "Preview Unavailable",
+                                systemImage: "photo",
+                                description: Text("Couldn’t load this image.")
+                            )
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                case .pdf:
+                    MacPDFPreview(url: item.downloadURL)
+                case .media:
+                    VideoPlayer(player: player)
+                        .onAppear {
+                            if player == nil {
+                                let newPlayer = AVPlayer(url: item.downloadURL)
+                                player = newPlayer
+                                newPlayer.play()
+                            }
+                        }
+                        .onDisappear {
+                            player?.pause()
+                        }
+                case .quickLook:
+                    ContentUnavailableView(
+                        "Preview in Quick Look",
+                        systemImage: "eye",
+                        description: Text("This file type opens with Quick Look instead of the in-app preview.")
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.opacity(0.9))
+        }
+        .frame(minWidth: 760, minHeight: 520)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: startDownload) {
+                    Label(isDownloading ? "Downloading…" : "Download…", systemImage: "arrow.down.circle")
+                }
+                .disabled(isDownloading)
+
+                Button(action: copyURL) {
+                    Label(didCopyURL ? "Copied" : "Copy URL", systemImage: didCopyURL ? "checkmark" : "link")
+                }
+
+                Button(role: .destructive) {
+                    showDeleteConfirm = true
+                } label: {
+                    Label("Delete…", systemImage: "trash")
+                }
+            }
+
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
+        .confirmationDialog(
+            "Delete \"\(item.object.name)\"?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                dismiss()
+                onDelete(item.object)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove the file from R2 and cannot be undone.")
+        }
+    }
+}
+
+private struct MacPDFPreview: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> PDFView {
+        let pdfView = PDFView()
+        pdfView.autoScales = true
+        pdfView.displayDirection = .vertical
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.backgroundColor = .black
+        context.coordinator.load(url: url, into: pdfView)
+        return pdfView
+    }
+
+    func updateNSView(_ nsView: PDFView, context: Context) {
+        context.coordinator.load(url: url, into: nsView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        private var currentURL: URL?
+        private var loadTask: Task<Void, Never>?
+
+        func load(url: URL, into pdfView: PDFView) {
+            guard currentURL != url else { return }
+            currentURL = url
+            loadTask?.cancel()
+            pdfView.document = nil
+
+            loadTask = Task {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    guard !Task.isCancelled else { return }
+                    let document = PDFDocument(data: data)
+                    await MainActor.run {
+                        pdfView.document = document
+                    }
+                } catch {
+                    return
+                }
+            }
+        }
+
+        deinit {
+            loadTask?.cancel()
+        }
+    }
+}
+#endif
+
 // MARK: - iOS floating selection bar
 
 #if os(iOS)
 private struct PreviewFile: Identifiable {
     let id = UUID()
     let url: URL
+}
+
+private enum PreviewMode {
+    case streamingMedia
+    case remoteDocument(RemoteDocumentPreview.Kind)
+    case quickLook
+    case downloadThenPreview
+}
+
+private struct StreamingMediaPreview: Identifiable {
+    let id = UUID()
+    let url: URL
+    let title: String
+}
+
+private struct RemoteDocumentPreview: Identifiable {
+    enum Kind {
+        case image
+        case pdf
+    }
+
+    let id = UUID()
+    let object: R2Object
+    let downloadURL: URL
+    let publicURL: URL
+    let title: String
+    let kind: Kind
 }
 
 private struct QuickLookPreviewSheet: UIViewControllerRepresentable {
@@ -1100,6 +1477,373 @@ private struct QuickLookPreviewSheet: UIViewControllerRepresentable {
 
         func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
             url as NSURL
+        }
+    }
+}
+
+private struct StreamingMediaPlayerView: UIViewControllerRepresentable {
+    let item: StreamingMediaPreview
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let controller = AVPlayerViewController()
+        controller.entersFullScreenWhenPlaybackBegins = true
+        controller.exitsFullScreenWhenPlaybackEnds = true
+        controller.allowsPictureInPicturePlayback = true
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {
+        if context.coordinator.currentURL != item.url {
+            context.coordinator.currentURL = item.url
+            let player = AVPlayer(url: item.url)
+            uiViewController.player = player
+            player.play()
+        }
+        uiViewController.title = item.title
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var currentURL: URL?
+    }
+
+    static func dismantleUIViewController(_ uiViewController: AVPlayerViewController, coordinator: Coordinator) {
+        uiViewController.player?.pause()
+        uiViewController.player = nil
+        coordinator.currentURL = nil
+    }
+}
+
+private struct RemoteDocumentPreviewView: View {
+    let item: RemoteDocumentPreview
+    let onDelete: (R2Object) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var isDownloading = false
+    @State private var showDeleteConfirm = false
+    @State private var didCopyURL = false
+    @State private var shareItem: PreviewShareableURL?
+
+    private func startDownload() {
+        guard !isDownloading else { return }
+        isDownloading = true
+        Task {
+            do {
+                let (temporaryURL, _) = try await URLSession.shared.download(from: item.downloadURL)
+                let destination = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(item.object.name)
+                try? FileManager.default.removeItem(at: destination)
+                try FileManager.default.moveItem(at: temporaryURL, to: destination)
+                await MainActor.run {
+                    shareItem = PreviewShareableURL(url: destination)
+                    isDownloading = false
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloading = false
+                }
+            }
+        }
+    }
+
+    private func copyURL() {
+        UIPasteboard.general.string = item.publicURL.absoluteString
+        withAnimation(.easeInOut(duration: 0.18)) {
+            didCopyURL = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                didCopyURL = false
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch item.kind {
+                case .image:
+                    RemoteImagePreview(url: item.downloadURL)
+                case .pdf:
+                    RemotePDFPreview(url: item.downloadURL)
+                }
+            }
+            .navigationTitle(item.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: copyURL) {
+                        Image(systemName: didCopyURL ? "checkmark" : "link")
+                    }
+                    .help(didCopyURL ? "Copied" : "Copy URL")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button(action: startDownload) {
+                            Label(isDownloading ? "Downloading…" : "Download", systemImage: "arrow.down.circle")
+                        }
+                        .disabled(isDownloading)
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .background(Color.black.ignoresSafeArea())
+        }
+        .confirmationDialog(
+            "Delete \"\(item.object.name)\"?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                dismiss()
+                onDelete(item.object)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove the file from R2 and cannot be undone.")
+        }
+        .sheet(item: $shareItem) { item in
+            PreviewShareSheet(url: item.url)
+                .presentationDetents([.medium, .large])
+        }
+    }
+}
+
+private struct PreviewShareableURL: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct PreviewShareSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+private struct RemoteImagePreview: View {
+    let url: URL
+
+    var body: some View {
+        ZoomableRemoteImageView(url: url)
+            .background(Color.black)
+    }
+}
+
+private struct ZoomableRemoteImageView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.backgroundColor = .black
+        scrollView.delegate = context.coordinator
+        scrollView.maximumZoomScale = 6
+        scrollView.minimumZoomScale = 1
+        scrollView.bouncesZoom = true
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+
+        let imageView = context.coordinator.imageView
+        imageView.contentMode = .scaleAspectFit
+        imageView.backgroundColor = .black
+        scrollView.addSubview(imageView)
+
+        context.coordinator.scrollView = scrollView
+        context.coordinator.load(url: url)
+        return scrollView
+    }
+
+    func updateUIView(_ uiView: UIScrollView, context: Context) {
+        context.coordinator.scrollView = uiView
+        context.coordinator.load(url: url)
+        context.coordinator.updateLayout()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        let imageView = UIImageView()
+        weak var scrollView: UIScrollView?
+        private var currentURL: URL?
+        private var loadTask: Task<Void, Never>?
+
+        func load(url: URL) {
+            guard currentURL != url else {
+                updateLayout()
+                return
+            }
+
+            currentURL = url
+            loadTask?.cancel()
+            imageView.image = nil
+
+            loadTask = Task { [weak self] in
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    guard !Task.isCancelled, let image = UIImage(data: data) else { return }
+                    await MainActor.run {
+                        self?.imageView.image = image
+                        self?.updateLayout(resetZoom: true)
+                    }
+                } catch {
+                    return
+                }
+            }
+        }
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            imageView
+        }
+
+        func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            centerImage(in: scrollView)
+        }
+
+        func updateLayout(resetZoom: Bool = false) {
+            guard let scrollView, let image = imageView.image else { return }
+
+            let boundsSize = scrollView.bounds.size
+            guard boundsSize.width > 0, boundsSize.height > 0 else { return }
+
+            let imageSize = image.size
+            let widthScale = boundsSize.width / imageSize.width
+            let heightScale = boundsSize.height / imageSize.height
+            let minimumScale = min(widthScale, heightScale)
+
+            scrollView.minimumZoomScale = minimumScale
+            scrollView.maximumZoomScale = max(minimumScale * 6, 6)
+
+            imageView.frame = CGRect(origin: .zero, size: imageSize)
+            scrollView.contentSize = imageSize
+
+            if resetZoom || scrollView.zoomScale < minimumScale {
+                scrollView.zoomScale = minimumScale
+            }
+
+            centerImage(in: scrollView)
+        }
+
+        private func centerImage(in scrollView: UIScrollView) {
+            let boundsSize = scrollView.bounds.size
+            var frame = imageView.frame
+
+            frame.origin.x = frame.width < boundsSize.width ? (boundsSize.width - frame.width) / 2 : 0
+            frame.origin.y = frame.height < boundsSize.height ? (boundsSize.height - frame.height) / 2 : 0
+
+            imageView.frame = frame
+        }
+
+        deinit {
+            loadTask?.cancel()
+        }
+    }
+}
+
+private struct RemotePDFPreview: View {
+    let url: URL
+
+    var body: some View {
+        RemotePDFViewController(url: url)
+            .background(Color(white: 0.08))
+    }
+}
+
+private struct RemotePDFViewController: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = UIViewController()
+        controller.view.backgroundColor = .black
+
+        let pdfView = PDFView()
+        pdfView.translatesAutoresizingMaskIntoConstraints = false
+        pdfView.autoScales = true
+        pdfView.displayDirection = .vertical
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.backgroundColor = .black
+
+        let spinner = UIActivityIndicatorView(style: .large)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.startAnimating()
+
+        controller.view.addSubview(pdfView)
+        controller.view.addSubview(spinner)
+
+        NSLayoutConstraint.activate([
+            pdfView.leadingAnchor.constraint(equalTo: controller.view.leadingAnchor),
+            pdfView.trailingAnchor.constraint(equalTo: controller.view.trailingAnchor),
+            pdfView.topAnchor.constraint(equalTo: controller.view.topAnchor),
+            pdfView.bottomAnchor.constraint(equalTo: controller.view.bottomAnchor),
+            spinner.centerXAnchor.constraint(equalTo: controller.view.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: controller.view.centerYAnchor)
+        ])
+
+        context.coordinator.pdfView = pdfView
+        context.coordinator.spinner = spinner
+        context.coordinator.load(url: url)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        context.coordinator.load(url: url)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        weak var pdfView: PDFView?
+        weak var spinner: UIActivityIndicatorView?
+        private var currentURL: URL?
+        private var loadTask: Task<Void, Never>?
+
+        func load(url: URL) {
+            guard currentURL != url else { return }
+            currentURL = url
+            loadTask?.cancel()
+            spinner?.startAnimating()
+            pdfView?.document = nil
+
+            loadTask = Task { [weak self] in
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    guard !Task.isCancelled else { return }
+                    let document = PDFDocument(data: data)
+                    await MainActor.run {
+                        self?.pdfView?.document = document
+                        self?.spinner?.stopAnimating()
+                    }
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        self?.spinner?.stopAnimating()
+                    }
+                }
+            }
+        }
+
+        deinit {
+            loadTask?.cancel()
         }
     }
 }
