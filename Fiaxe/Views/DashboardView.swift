@@ -3,6 +3,10 @@ import SwiftUI
 struct DashboardView: View {
     @Environment(AppViewModel.self) private var viewModel
 
+    #if os(macOS)
+    @Environment(\.colorScheme) private var colorScheme
+    #endif
+
     var body: some View {
         Group {
             if viewModel.credentialsList.isEmpty {
@@ -116,6 +120,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(viewModel.credentials?.bucketName ?? "Bucket")
                     .font(.title2.bold())
+                    .foregroundStyle(.primary)
                 if let scanned = stats.lastScanned {
                     Text("Last scanned \(scanned.formatted(.relative(presentation: .named)))")
                         .font(.caption)
@@ -220,22 +225,7 @@ struct DashboardView: View {
                             fileTypeRow(category: category, catStats: catStats, totalSize: stats.totalSize)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 8)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        #if os(iOS)
-                                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                                        #else
-                                        .fill(.white.opacity(0.6))
-                                        #endif
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        #if os(iOS)
-                                        .strokeBorder(.quaternary.opacity(0.4), lineWidth: 0.75)
-                                        #else
-                                        .strokeBorder(colorForCategory(category).opacity(0.08), lineWidth: 1)
-                                        #endif
-                                )
+                                .modifier(DashboardTileModifier(tint: colorForCategory(category)))
                         }
                     }
                 }
@@ -515,6 +505,7 @@ struct DashboardView: View {
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(value)
                     .font(.title2.bold().monospacedDigit())
+                    .foregroundStyle(.primary)
 
                 Spacer(minLength: 4)
             }
@@ -531,23 +522,7 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                #if os(iOS)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(.quaternary.opacity(0.4), lineWidth: 0.75)
-                )
-                #else
-                .fill(.white.opacity(0.82))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.accentColor.opacity(0.08), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.03), radius: 8, x: 0, y: 4)
-                #endif
-        )
+        .modifier(DashboardTileModifier(tint: .accentColor))
     }
 
     private func recentFileTimelineMarker(color: Color) -> some View {
@@ -558,11 +533,11 @@ struct DashboardView: View {
     }
 
     private var currentBucketUploadItems: [UploadItem] {
-        guard let bucketName = viewModel.credentials?.bucketName, !bucketName.isEmpty else {
+        guard let credentials = viewModel.credentials else {
             return viewModel.historyStore.items
         }
 
-        return viewModel.historyStore.items.filter { $0.bucketName == bucketName }
+        return viewModel.historyStore.items.filter { $0.matches(credentials: credentials) }
     }
 
     // MARK: - Helpers
@@ -585,26 +560,35 @@ struct DashboardView: View {
             .ignoresSafeArea()
         #else
         ZStack {
+            Color(nsColor: .windowBackgroundColor)
+
             LinearGradient(
                 colors: [
-                    Color(red: 0.985, green: 0.978, blue: 0.968),
-                    Color.white,
+                    colorScheme == .dark
+                        ? Color(nsColor: .windowBackgroundColor).opacity(0.9)
+                        : Color(red: 0.972, green: 0.965, blue: 0.952),
+                    colorScheme == .dark
+                        ? Color(nsColor: .underPageBackgroundColor)
+                        : Color(nsColor: .controlBackgroundColor),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
             Circle()
-                .fill(Color.accentColor.opacity(0.08))
-                .frame(width: 420, height: 420)
-                .blur(radius: 60)
-                .offset(x: 280, y: -180)
+                .fill(Color.accentColor.opacity(colorScheme == .dark ? 0.14 : 0.12))
+                .frame(width: 460, height: 460)
+                .blur(radius: 80)
+                .offset(x: 300, y: -210)
 
             Circle()
-                .fill(Color.orange.opacity(0.08))
-                .frame(width: 320, height: 320)
-                .blur(radius: 50)
-                .offset(x: -260, y: 260)
+                .fill(Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.1))
+                .frame(width: 340, height: 340)
+                .blur(radius: 64)
+                .offset(x: -250, y: 250)
+
+            Rectangle()
+                .fill(.ultraThinMaterial.opacity(colorScheme == .dark ? 0.35 : 0.55))
         }
         .ignoresSafeArea()
         #endif
@@ -670,31 +654,14 @@ private struct StatCard: View {
             }
             Text(value)
                 .font(.title2.bold().monospacedDigit())
+                .foregroundStyle(.primary)
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                #if os(iOS)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                #else
-                .fill(.white.opacity(0.82))
-                #endif
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        #if os(iOS)
-                        .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.75)
-                        #else
-                        .strokeBorder(color.opacity(0.12), lineWidth: 1)
-                        #endif
-                )
-                #if os(macOS)
-                .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 6)
-                #endif
-        }
+        .modifier(DashboardTileModifier(tint: color))
     }
 }
 
@@ -718,25 +685,52 @@ private struct DashboardSection<Content: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background {
+        .modifier(DashboardTileModifier(tint: .primary))
+    }
+}
+
+private struct DashboardTileModifier: ViewModifier {
+    let tint: Color
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content.background {
             RoundedRectangle(cornerRadius: 12)
-                #if os(iOS)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                #else
-                .fill(.white.opacity(0.82))
-                #endif
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        #if os(iOS)
-                        .strokeBorder(.quaternary.opacity(0.4), lineWidth: 0.75)
-                        #else
-                        .strokeBorder(.black.opacity(0.04), lineWidth: 1)
-                        #endif
+                        .strokeBorder(.quaternary.opacity(0.45), lineWidth: 0.75)
                 )
-                #if os(macOS)
-                .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 8)
-                #endif
         }
+        #else
+        if #available(macOS 26.0, *) {
+            content
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.clear)
+                        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(tint.opacity(0.12), lineWidth: 0.9)
+                        )
+                }
+        } else {
+            content
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.regularMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.72))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(tint.opacity(0.10), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+                }
+        }
+        #endif
     }
 }
 

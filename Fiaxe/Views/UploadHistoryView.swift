@@ -70,9 +70,6 @@ struct UploadHistoryView: View {
                 IOSHistoryRow(item: item)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
-            .onDelete { offsets in
-                viewModel.historyStore.remove(at: offsets)
-            }
         }
         .listStyle(.insetGrouped)
         .toolbar {
@@ -82,7 +79,7 @@ struct UploadHistoryView: View {
                         Button(role: .destructive) {
                             viewModel.historyStore.clearAll()
                         } label: {
-                            Label("Clear All History", systemImage: "trash")
+                            Label("Clear Local History", systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -116,9 +113,6 @@ struct UploadHistoryView: View {
             ForEach(viewModel.historyStore.items) { item in
                 HistoryRowView(item: item)
             }
-            .onDelete { offsets in
-                viewModel.historyStore.remove(at: offsets)
-            }
         }
         .listStyle(.inset)
         .toolbar {
@@ -126,7 +120,7 @@ struct UploadHistoryView: View {
                 Button(role: .destructive) {
                     viewModel.historyStore.clearAll()
                 } label: {
-                    Label("Clear History", systemImage: "trash")
+                    Label("Clear Local History", systemImage: "trash")
                 }
             }
         }
@@ -229,8 +223,15 @@ private struct IOSHistoryRow: View {
             Button(role: .destructive) {
                 viewModel.deleteHistoryItem(item)
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label("Delete from R2", systemImage: "trash")
             }
+
+            Button {
+                viewModel.removeHistoryItem(item)
+            } label: {
+                Label("Remove", systemImage: "clock.badge.xmark")
+            }
+            .tint(.gray)
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
@@ -243,6 +244,27 @@ private struct IOSHistoryRow: View {
                 Label("Copy URL", systemImage: "doc.on.doc")
             }
             .tint(.accentColor)
+        }
+        .contextMenu {
+            Button {
+                viewModel.downloadHistoryItem(item)
+            } label: {
+                Label("Download", systemImage: "arrow.down.circle")
+            }
+
+            Button {
+                viewModel.removeHistoryItem(item)
+            } label: {
+                Label("Remove from History", systemImage: "clock.badge.xmark")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                viewModel.deleteHistoryItem(item)
+            } label: {
+                Label("Delete from R2", systemImage: "trash")
+            }
         }
     }
 }

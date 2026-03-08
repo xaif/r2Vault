@@ -66,6 +66,14 @@ struct UpdateSheetView: View {
                     }
                     Button("Cancel") { updater.cancel() }
                         .foregroundStyle(.red)
+                case .verifying:
+                    VStack(spacing: 8) {
+                        ProgressView()
+                            .frame(width: 240)
+                        Text("Verifying download…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 case .downloaded:
                     Text("Update downloaded. Install when you're ready.")
                         .foregroundStyle(.secondary)

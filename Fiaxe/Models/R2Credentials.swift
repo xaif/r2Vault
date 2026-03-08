@@ -33,9 +33,31 @@ struct R2Credentials: Sendable, Codable, Equatable, Identifiable {
         URL(string: "https://\(accountId).r2.cloudflarestorage.com")!
     }
 
+    static func normalizedCustomDomain(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty,
+              var components = URLComponents(string: trimmed),
+              components.scheme?.lowercased() == "https",
+              components.host?.isEmpty == false,
+              components.query == nil,
+              components.fragment == nil else {
+            return nil
+        }
+
+        components.scheme = "https"
+        components.user = nil
+        components.password = nil
+
+        if components.percentEncodedPath == "/" {
+            components.percentEncodedPath = ""
+        }
+
+        return components.url?.absoluteString
+    }
+
     /// Constructs the public URL for an uploaded object key
     func publicURL(forKey key: String) -> URL {
-        if let customDomain, !customDomain.isEmpty,
+        if let customDomain = Self.normalizedCustomDomain(customDomain),
            let base = URL(string: customDomain) {
             return base.appendingPathComponent(key)
         }

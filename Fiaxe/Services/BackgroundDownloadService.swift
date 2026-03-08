@@ -55,7 +55,6 @@ extension BackgroundDownloadService: URLSessionDownloadDelegate, URLSessionTaskD
             guard let pending = pendingDownloads[downloadTask.taskIdentifier] else { return }
 
             do {
-                try? FileManager.default.removeItem(at: pending.destinationURL)
                 try FileManager.default.moveItem(at: location, to: pending.destinationURL)
                 pendingDownloads[downloadTask.taskIdentifier] = nil
                 pending.onSuccess(pending.destinationURL)

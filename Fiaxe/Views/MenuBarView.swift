@@ -12,8 +12,8 @@ struct MenuBarView: View {
     }
 
     private var currentBucketItems: [UploadItem] {
-        guard let bucket = viewModel.credentials?.bucketName else { return [] }
-        return viewModel.historyStore.items.filter { $0.bucketName == bucket }
+        guard let credentials = viewModel.credentials else { return [] }
+        return viewModel.historyStore.items.filter { $0.matches(credentials: credentials) }
     }
 
     var body: some View {
@@ -391,7 +391,9 @@ private struct MenuBarHistoryRow: View {
                 }
             }
             .task {
-                guard isImageOrVideo, thumbnail == nil, let creds = viewModel.credentials else { return }
+                guard isImageOrVideo,
+                      thumbnail == nil,
+                      let creds = viewModel.credentials(for: item) else { return }
                 thumbnail = await ThumbnailCache.shared.thumbnail(for: item.r2Key, credentials: creds)
             }
 
@@ -445,11 +447,11 @@ private struct MenuBarHistoryRow: View {
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .animation(.easeOut(duration: 0.15), value: copied)
         .confirmationDialog(
-            "Delete \"\(item.fileName)\"?",
+            "Delete \"\(item.fileName)\" from R2?",
             isPresented: $showDeleteConfirm,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) {
+            Button("Delete from R2", role: .destructive) {
                 viewModel.deleteHistoryItem(item)
             }
             Button("Cancel", role: .cancel) {}

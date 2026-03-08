@@ -35,8 +35,8 @@ actor ThumbnailCache {
     /// Returns a cached thumbnail or fetches it using a presigned URL.
     /// `key` is the R2 object key used as cache identifier.
     func thumbnail(for key: String, credentials: R2Credentials) async -> PlatformImage? {
-        // Scope cache key by bucket so different buckets never share thumbnails
-        let scopedKey = "\(credentials.bucketName)/\(key)"
+        // Scope cache key by account and bucket so different connections never share thumbnails.
+        let scopedKey = "\(credentials.accountId)/\(credentials.bucketName)/\(key)"
         let cacheKey = scopedKey as NSString
 
         // 1. Memory cache hit

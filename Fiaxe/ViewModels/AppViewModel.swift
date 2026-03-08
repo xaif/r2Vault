@@ -22,6 +22,7 @@ enum BrowserSortKey: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+@MainActor
 @Observable
 final class AppViewModel {
     // Upload queue
@@ -79,6 +80,7 @@ final class AppViewModel {
     var bucketStats: BucketStats?
     var isScanning = false
     var scanError: String?
+    private var scanGeneration = 0
 
     // MARK: - Browser state
 
@@ -198,6 +200,7 @@ final class AppViewModel {
 
     func saveCredentials(_ creds: R2Credentials) {
         let isNew = !credentialsList.contains(where: { $0.id == creds.id })
+        let shouldReloadSelectedCredential = isNew || selectedCredentialID == creds.id
         if let idx = credentialsList.firstIndex(where: { $0.id == creds.id }) {
             credentialsList[idx] = creds
         } else {
@@ -208,25 +211,14 @@ final class AppViewModel {
         } catch {
             showError("Failed to save credentials: \(error.localizedDescription)")
         }
-        if isNew {
-            // New bucket: reset browser and load fresh
-            selectedCredentialID = creds.id
-            currentPrefix = ""
-            backStack = []
-            forwardStack = []
-            browserObjects = []
-            browserFolders = []
-            browserError = nil
-            selectedObjectIDs = []
-            invalidateBrowserCache()
-            Task { await ThumbnailCache.shared.clearMemory() }
-            loadCurrentFolder()
-        } else {
-            selectedCredentialID = creds.id
+        selectedCredentialID = creds.id
+        if shouldReloadSelectedCredential {
+            resetCredentialScopedState(loadCurrentFolder: true)
         }
     }
 
     func deleteCredentials(id: UUID) {
+        let deletedSelectedCredential = selectedCredentialID == id
         credentialsList.removeAll { $0.id == id }
         if selectedCredentialID == id {
             selectedCredentialID = credentialsList.first?.id
@@ -236,21 +228,16 @@ final class AppViewModel {
         } catch {
             showError("Failed to save credentials: \(error.localizedDescription)")
         }
+
+        if deletedSelectedCredential {
+            resetCredentialScopedState(loadCurrentFolder: selectedCredentialID != nil)
+        }
     }
 
     func selectCredentials(id: UUID) {
         guard id != selectedCredentialID else { return }
         selectedCredentialID = id
-        currentPrefix = ""
-        backStack = []
-        forwardStack = []
-        browserObjects = []
-        browserFolders = []
-        browserError = nil
-        selectedObjectIDs = []
-        invalidateBrowserCache()
-        Task { await ThumbnailCache.shared.clearMemory() }
-        loadCurrentFolder()
+        resetCredentialScopedState(loadCurrentFolder: true)
     }
 
     func testConnection() async -> Bool {
@@ -261,6 +248,27 @@ final class AppViewModel {
             showError("Connection test failed: \(error.localizedDescription)")
             return false
         }
+    }
+
+    func credentials(for historyItem: UploadItem) -> R2Credentials? {
+        if let credentialID = historyItem.credentialID,
+           let matching = credentialsList.first(where: { $0.id == credentialID }) {
+            return matching
+        }
+
+        if let accountId = historyItem.accountId,
+           let matching = credentialsList.first(where: {
+               $0.accountId == accountId && $0.bucketName == historyItem.bucketName
+           }) {
+            return matching
+        }
+
+        return credentialsList.first(where: { $0.bucketName == historyItem.bucketName })
+    }
+
+    func historyItemMatchesSelectedCredentials(_ item: UploadItem) -> Bool {
+        guard let credentials else { return false }
+        return item.matches(credentials: credentials)
     }
 
     // MARK: - Browser Navigation
@@ -508,23 +516,40 @@ final class AppViewModel {
         guard let credentials else { return }
         let toDelete = allBrowserItems.filter { selectedObjectIDs.contains($0.id) }
         selectedObjectIDs.removeAll()
-        await withTaskGroup(of: Void.self) { group in
+        let failedItems = await withTaskGroup(of: String?.self, returning: [String].self) { group in
             for object in toDelete {
+                let objectName = object.name
                 group.addTask {
                     do {
                         if object.isFolder {
                             try await self.deleteRecursive(prefix: object.key, credentials: credentials)
                         } else {
-                            try? await R2BrowseService.deleteObject(credentials: credentials, key: object.key)
+                            try await R2BrowseService.deleteObject(credentials: credentials, key: object.key)
                         }
+                        return nil
                     } catch {
-                        // Individual folder delete errors are silently ignored to not block other deletions
+                        return objectName
                     }
                 }
             }
+
+            var failedItems: [String] = []
+            for await failedItem in group {
+                if let failedItem {
+                    failedItems.append(failedItem)
+                }
+            }
+            return failedItems
         }
+
         invalidateBrowserCache()
         loadCurrentFolder()
+
+        if !failedItems.isEmpty {
+            let sample = failedItems.prefix(3).joined(separator: ", ")
+            let suffix = failedItems.count > 3 ? ", and \(failedItems.count - 3) more" : ""
+            showError("Failed to delete \(failedItems.count) item(s): \(sample)\(suffix)")
+        }
     }
 
     /// Recursively deletes all objects under `prefix` (including the folder placeholder itself).
@@ -832,7 +857,9 @@ final class AppViewModel {
                     fileSize: uploadTask.fileSize,
                     r2Key: key,
                     publicURL: publicURL,
-                    bucketName: credentials.bucketName
+                    bucketName: credentials.bucketName,
+                    credentialID: credentials.id,
+                    accountId: credentials.accountId
                 )
                 historyStore.add(item)
                 copyToClipboard(publicURL.absoluteString)
@@ -880,7 +907,6 @@ final class AppViewModel {
         Task {
             do {
                 let (tmpURL, _) = try await URLSession.shared.download(from: remoteURL)
-                try? FileManager.default.removeItem(at: dest)
                 try FileManager.default.moveItem(at: tmpURL, to: dest)
             } catch {
                 await MainActor.run { showError("Download failed: \(error.localizedDescription)") }
@@ -891,28 +917,45 @@ final class AppViewModel {
 
     /// Downloads a history item to the user's Downloads folder via a presigned URL.
     func downloadHistoryItem(_ item: UploadItem) {
-        guard let credentials else { return }
+        guard let credentials = credentials(for: item) else {
+            showError("Missing credentials for \(item.bucketName). Re-add that bucket to download this history item.")
+            return
+        }
         guard let presigned = AWSV4Signer.presignedURL(for: item.r2Key, credentials: credentials) else { return }
-        let dest = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(item.fileName)
+        let downloadsDirectory = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        let dest = availableDestinationURL(
+            startingAt: downloadsDirectory.appendingPathComponent(item.fileName)
+        )
         downloadToDestination(from: presigned, dest: dest)
     }
 
     /// Deletes a history item from R2 and removes it from local history.
     func deleteHistoryItem(_ item: UploadItem) {
-        guard let credentials else { return }
-        // Remove from local history immediately
-        if let idx = historyStore.items.firstIndex(where: { $0.id == item.id }) {
-            historyStore.items.remove(at: idx)
+        guard let credentials = credentials(for: item) else {
+            showError("Missing credentials for \(item.bucketName). Re-add that bucket to delete this history item.")
+            return
         }
-        // Delete from R2 in background
+
         Task {
-            try? await R2BrowseService.deleteObject(credentials: credentials, key: item.r2Key)
-            await MainActor.run {
-                invalidateBrowserCache()
-                loadCurrentFolder()
+            do {
+                try await R2BrowseService.deleteObject(credentials: credentials, key: item.r2Key)
+                await MainActor.run {
+                    historyStore.remove(item)
+                    if historyItemMatchesSelectedCredentials(item) {
+                        invalidateBrowserCache()
+                        loadCurrentFolder()
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    showError("Failed to delete \(item.fileName): \(error.localizedDescription)")
+                }
             }
         }
+    }
+
+    func removeHistoryItem(_ item: UploadItem) {
+        historyStore.remove(item)
     }
 
     // MARK: - Dashboard / Bucket Scan
@@ -922,6 +965,10 @@ final class AppViewModel {
             scanError = "No credentials configured."
             return
         }
+
+        scanGeneration += 1
+        let requestGeneration = scanGeneration
+        let credentialID = credentials.id
         isScanning = true
         scanError = nil
         Task {
@@ -933,7 +980,7 @@ final class AppViewModel {
                 let allKeys = try await Self.listAllObjectsWithDetails(credentials: credentials)
 
                 var stats = BucketStats()
-                stats.totalFolders = rootFolders.count
+                stats.totalFolders = max(rootFolders.count, Self.totalFolderCount(from: allKeys))
                 stats.totalFiles = allKeys.count
                 stats.totalSize = allKeys.reduce(0) { $0 + $1.size }
 
@@ -959,12 +1006,20 @@ final class AppViewModel {
                     .prefix(5)
                     .map { BucketStats.FileInfo(key: $0.key, size: $0.size, lastModified: $0.lastModified) }
 
-                stats.lastScanned = Date()
-                bucketStats = stats
-                isScanning = false
+                await MainActor.run {
+                    guard requestGeneration == self.scanGeneration,
+                          self.selectedCredentialID == credentialID else { return }
+                    stats.lastScanned = Date()
+                    self.bucketStats = stats
+                    self.isScanning = false
+                }
             } catch {
-                scanError = error.localizedDescription
-                isScanning = false
+                await MainActor.run {
+                    guard requestGeneration == self.scanGeneration,
+                          self.selectedCredentialID == credentialID else { return }
+                    self.scanError = error.localizedDescription
+                    self.isScanning = false
+                }
             }
         }
     }
@@ -1009,6 +1064,23 @@ final class AppViewModel {
         } while continuationToken != nil
 
         return allObjects
+    }
+
+    private static func totalFolderCount(from objects: [R2Object]) -> Int {
+        var folders = Set<String>()
+
+        for object in objects {
+            let segments = object.key.split(separator: "/", omittingEmptySubsequences: true)
+            guard segments.count > 1 else { continue }
+
+            var prefix = ""
+            for segment in segments.dropLast() {
+                prefix += String(segment) + "/"
+                folders.insert(prefix)
+            }
+        }
+
+        return folders.count
     }
 
     // MARK: - Updates
@@ -1059,6 +1131,53 @@ final class AppViewModel {
     private func showError(_ message: String) {
         alertMessage = message
         showAlert = true
+    }
+
+    private func resetCredentialScopedState(loadCurrentFolder shouldLoadCurrentFolder: Bool) {
+        browserLoadTask?.cancel()
+        currentPrefix = ""
+        backStack = []
+        forwardStack = []
+        browserObjects = []
+        browserFolders = []
+        browserError = nil
+        selectedObjectIDs = []
+        isBrowsing = false
+        invalidateBrowserCache()
+
+        scanGeneration += 1
+        bucketStats = nil
+        scanError = nil
+        isScanning = false
+
+        Task { await ThumbnailCache.shared.clearMemory() }
+
+        if shouldLoadCurrentFolder {
+            loadCurrentFolder()
+        }
+    }
+
+    private func availableDestinationURL(startingAt preferredURL: URL) -> URL {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: preferredURL.path) else { return preferredURL }
+
+        let directory = preferredURL.deletingLastPathComponent()
+        let baseName = preferredURL.deletingPathExtension().lastPathComponent
+        let pathExtension = preferredURL.pathExtension
+
+        var index = 2
+        while true {
+            var candidate = directory.appendingPathComponent("\(baseName) \(index)")
+            if !pathExtension.isEmpty {
+                candidate.appendPathExtension(pathExtension)
+            }
+
+            if !fileManager.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+
+            index += 1
+        }
     }
 
     private func configureUploadTask(_ task: FileUploadTask) {

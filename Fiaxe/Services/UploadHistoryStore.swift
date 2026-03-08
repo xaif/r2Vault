@@ -5,8 +5,14 @@ import SwiftUI
 @Observable
 final class UploadHistoryStore {
     private static let storageKey = "fiaxe.uploadHistory"
+    private var isRestoring = false
 
-    var items: [UploadItem] = []
+    var items: [UploadItem] = [] {
+        didSet {
+            guard !isRestoring else { return }
+            save()
+        }
+    }
 
     init() {
         load()
@@ -14,17 +20,18 @@ final class UploadHistoryStore {
 
     func add(_ item: UploadItem) {
         items.insert(item, at: 0)  // newest first
-        save()
     }
 
     func remove(at offsets: IndexSet) {
         items.remove(atOffsets: offsets)
-        save()
+    }
+
+    func remove(_ item: UploadItem) {
+        items.removeAll { $0.id == item.id }
     }
 
     func clearAll() {
         items.removeAll()
-        save()
     }
 
     private func save() {
@@ -35,6 +42,8 @@ final class UploadHistoryStore {
     private func load() {
         guard let data = UserDefaults.standard.data(forKey: Self.storageKey),
               let decoded = try? JSONDecoder().decode([UploadItem].self, from: data) else { return }
+        isRestoring = true
         items = decoded
+        isRestoring = false
     }
 }

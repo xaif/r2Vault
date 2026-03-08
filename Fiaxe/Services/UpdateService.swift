@@ -17,6 +17,12 @@ struct GitHubRelease: Decodable {
     var dmgDownloadURL: URL? {
         assets.first(where: { $0.name.hasSuffix(".dmg") }).flatMap { URL(string: $0.browserDownloadUrl) }
     }
+
+    /// The browser download URL for the checksum sidecar that matches the DMG asset.
+    var dmgChecksumURL: URL? {
+        assets.first(where: { $0.name.hasSuffix(".dmg.sha256") }).flatMap { URL(string: $0.browserDownloadUrl) }
+            ?? assets.first(where: { $0.name.uppercased() == "SHA256SUMS" }).flatMap { URL(string: $0.browserDownloadUrl) }
+    }
 }
 
 struct GitHubAsset: Decodable {
@@ -37,7 +43,12 @@ enum UpdateService {
         var request = URLRequest(url: apiURL, cachePolicy: .reloadIgnoringLocalCacheData)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+
         let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
 
         let latestVersion = release.tagName.trimmingCharacters(in: .init(charactersIn: "v"))

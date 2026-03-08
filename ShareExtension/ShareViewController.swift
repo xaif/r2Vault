@@ -7,6 +7,12 @@ import UniformTypeIdentifiers
 /// into the shared App Group container, then saves a pending-upload record so
 /// the host app can pick it up on next launch (or via openURL).
 class ShareViewController: UIViewController {
+    private let maxInMemoryFallbackSize = 32 * 1024 * 1024
+
+    private struct PendingShareFile {
+        let sourceURL: URL
+        let fileName: String
+    }
 
     // MARK: - View lifecycle
 
@@ -48,12 +54,10 @@ class ShareViewController: UIViewController {
         for item in items {
             guard let attachments = item.attachments else { continue }
             for provider in attachments {
-                if let url = await loadFileURL(from: provider) {
-                    let dest = inboxURL.appendingPathComponent(url.lastPathComponent)
-                    // Remove stale file if present
-                    try? FileManager.default.removeItem(at: dest)
+                if let sharedFile = await loadFileURL(from: provider) {
+                    let dest = uniqueDestinationURL(for: sharedFile.fileName, in: inboxURL)
                     do {
-                        try FileManager.default.copyItem(at: url, to: dest)
+                        try FileManager.default.copyItem(at: sharedFile.sourceURL, to: dest)
                         copiedURLs.append(dest)
                     } catch {
                         // Skip files we can't copy
@@ -81,26 +85,93 @@ class ShareViewController: UIViewController {
     }
 
     /// Attempts to load a file-backed URL from an NSItemProvider.
-    private func loadFileURL(from provider: NSItemProvider) async -> URL? {
+    private func loadFileURL(from provider: NSItemProvider) async -> PendingShareFile? {
         // Priority: load as a file URL first (works for Files app, etc.)
         let fileTypes: [UTType] = [.image, .movie, .data, .fileURL]
         for type in fileTypes {
             if provider.hasItemConformingToTypeIdentifier(type.identifier) {
-                if let url = try? await provider.loadItem(forTypeIdentifier: type.identifier) as? URL {
-                    return url
+                if let fileURL = await loadFileRepresentation(from: provider, type: type) {
+                    return fileURL
                 }
+
+                if let url = try? await provider.loadItem(forTypeIdentifier: type.identifier) as? URL {
+                    return PendingShareFile(sourceURL: url, fileName: preferredFileName(for: provider, fallbackURL: url))
+                }
+
                 // Some providers give Data instead of URL
                 if let data = try? await provider.loadItem(forTypeIdentifier: type.identifier) as? Data {
+                    guard data.count <= maxInMemoryFallbackSize else { return nil }
                     let ext = type.preferredFilenameExtension ?? "bin"
                     let tempURL = FileManager.default.temporaryDirectory
                         .appendingPathComponent(UUID().uuidString)
                         .appendingPathExtension(ext)
                     try? data.write(to: tempURL)
-                    return tempURL
+                    return PendingShareFile(
+                        sourceURL: tempURL,
+                        fileName: preferredFileName(for: provider, fallbackURL: tempURL)
+                    )
                 }
             }
         }
         return nil
+    }
+
+    private func loadFileRepresentation(from provider: NSItemProvider, type: UTType) async -> PendingShareFile? {
+        await withCheckedContinuation { continuation in
+            provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, _ in
+                guard let url else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                let preferredName = self.preferredFileName(for: provider, fallbackURL: url)
+                let ext = (preferredName as NSString).pathExtension.isEmpty
+                    ? (type.preferredFilenameExtension ?? url.pathExtension)
+                    : ""
+
+                var tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                if !ext.isEmpty {
+                    tempURL.appendPathExtension(ext)
+                }
+
+                do {
+                    try FileManager.default.copyItem(at: url, to: tempURL)
+                    continuation.resume(returning: PendingShareFile(sourceURL: tempURL, fileName: preferredName))
+                } catch {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    private func preferredFileName(for provider: NSItemProvider, fallbackURL: URL) -> String {
+        if let suggestedName = provider.suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !suggestedName.isEmpty {
+            let pathExtension = fallbackURL.pathExtension
+            if (suggestedName as NSString).pathExtension.isEmpty, !pathExtension.isEmpty {
+                return suggestedName + ".\(pathExtension)"
+            }
+            return suggestedName
+        }
+
+        return fallbackURL.lastPathComponent
+    }
+
+    private func uniqueDestinationURL(for fileName: String, in directory: URL) -> URL {
+        let baseName = (fileName as NSString).deletingPathExtension
+        let pathExtension = (fileName as NSString).pathExtension
+        var candidate = directory.appendingPathComponent(fileName)
+        var index = 2
+
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            let nextName = pathExtension.isEmpty
+                ? "\(baseName) \(index)"
+                : "\(baseName) \(index).\(pathExtension)"
+            candidate = directory.appendingPathComponent(nextName)
+            index += 1
+        }
+
+        return candidate
     }
 }
 

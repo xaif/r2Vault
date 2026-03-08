@@ -58,25 +58,17 @@
 
 ## Installation
 
-### One-line Install (Recommended)
-
-Run this in Terminal — it downloads the latest release, installs it, and handles everything:
+### Homebrew (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xaif/r2Vault/main/install.sh | bash
-```
-
-### Homebrew
-
-```bash
-brew install --cask --no-quarantine xaif/tap/r2vault
+brew install --cask xaif/tap/r2vault
 ```
 
 ### Manual Download
 
 1. Download the latest DMG from [Releases](https://github.com/xaif/r2Vault/releases/latest)
 2. Open the DMG and drag **R2Vault** to **Applications**
-3. **Important:** Before opening the app, do **one** of the following:
+3. If macOS warns because the app is not notarized, do **one** of the following:
 
    **Option A — Right-click to Open (easiest):**
    - Right-click (or Control-click) on R2Vault in Applications
@@ -84,17 +76,20 @@ brew install --cask --no-quarantine xaif/tap/r2vault
    - Click **Open** in the dialog that appears
    - You only need to do this once — after that it opens normally
 
-   **Option B — Terminal command:**
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/R2Vault.app
-   ```
-
-   **Option C — System Settings:**
+   **Option B — System Settings:**
    - Try to open the app normally (it will be blocked)
    - Go to **System Settings → Privacy & Security**
    - Scroll down and click **Open Anyway** next to the R2Vault message
 
 > **Why is this needed?** r2Vault is free and open source. Apple charges $99/year for app notarization, so macOS treats it as "unidentified". The app is safe — you can [review the source code](https://github.com/xaif/r2Vault) yourself.
+
+### Terminal Installer
+
+If you prefer an automated install, the bundled installer downloads the latest release and verifies its published checksum before installing it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xaif/r2Vault/main/install.sh | bash
+```
 
 ### Build from Source
 

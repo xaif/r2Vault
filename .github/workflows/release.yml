@@ -58,6 +58,7 @@ jobs:
           APP_NAME=$(basename "$APP")
           DMG_TMP="/tmp/r2vault_tmp.dmg"
           DMG_OUT="/tmp/r2Vault.dmg"
+          CHECKSUM_OUT="/tmp/r2Vault.dmg.sha256"
           VOLNAME="R2 Vault"
 
           # Strip quarantine xattrs (preserve code signature)
@@ -99,8 +100,10 @@ jobs:
           hdiutil detach "$DEVICE" -quiet
           hdiutil convert "$DMG_TMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_OUT" -ov -quiet
           rm -f "$DMG_TMP"
+          shasum -a 256 "$DMG_OUT" | awk '{print $1 "  r2Vault.dmg"}' > "$CHECKSUM_OUT"
 
           echo "DMG_PATH=$DMG_OUT" >> $GITHUB_ENV
+          echo "DMG_SHA256_PATH=$CHECKSUM_OUT" >> $GITHUB_ENV
 
       - name: Extract Changelog
         run: |
@@ -114,12 +117,11 @@ jobs:
           printf '%s\n' "$NOTES" > /tmp/release_notes.md
           printf '\n- - -\n\n' >> /tmp/release_notes.md
           printf '## Installation\n\n' >> /tmp/release_notes.md
-          printf '**One-line install (recommended):**\n' >> /tmp/release_notes.md
+          printf '**Homebrew (recommended):**\n' >> /tmp/release_notes.md
+          printf '```bash\nbrew install --cask xaif/tap/r2vault\n```\n\n' >> /tmp/release_notes.md
+          printf '**Manual:** Download the DMG above, drag to Applications, then right-click the app > **Open** the first time if macOS warns because the app is not notarized.\n\n' >> /tmp/release_notes.md
+          printf '**Terminal installer (verifies the release checksum):**\n' >> /tmp/release_notes.md
           printf '```bash\ncurl -fsSL https://raw.githubusercontent.com/xaif/r2Vault/main/install.sh | bash\n```\n\n' >> /tmp/release_notes.md
-          printf '**Homebrew:**\n' >> /tmp/release_notes.md
-          printf '```bash\nbrew install --cask --no-quarantine xaif/tap/r2vault\n```\n\n' >> /tmp/release_notes.md
-          printf '**Manual:** Download the DMG above, drag to Applications, then right-click the app > **Open** (first time only). Or run:\n' >> /tmp/release_notes.md
-          printf '```\nxattr -dr com.apple.quarantine /Applications/R2Vault.app\n```\n' >> /tmp/release_notes.md
 
       - name: Publish Release
         env:
@@ -134,10 +136,12 @@ jobs:
 
             gh release upload "$TAG" \
               "${{ env.DMG_PATH }}" \
+              "${{ env.DMG_SHA256_PATH }}" \
               --clobber
           else
             gh release create "$TAG" \
               --title "$TAG" \
               --notes-file /tmp/release_notes.md \
-              "${{ env.DMG_PATH }}"
+              "${{ env.DMG_PATH }}" \
+              "${{ env.DMG_SHA256_PATH }}"
           fi

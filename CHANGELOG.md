@@ -2,6 +2,21 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v1.2.11] - 2026-03-08
+
+### Added
+- Stronger release integrity checks with published DMG SHA-256 assets that the installer and in-app updater verify before replacing the app
+
+### Changed
+- Safer release guidance across GitHub and the installer flow, including checksum-aware terminal installs and improved manual install instructions
+- Dashboard surfaces on macOS now use native-looking glass/material styling with better contrast instead of washing out into a white screen
+
+### Fixed
+- History actions now stay tied to the correct bucket credentials so downloads and deletes do not target the wrong R2 account after switching buckets
+- Dashboard scanning and stats refresh more reliably when switching credentials, including correct nested folder totals and reduced stale results
+- Batch delete, downloads, and share/import flows now avoid several silent failures, overwrite hazards, and memory-heavy fallback paths
+- Version alignment between the app and Live Activity extension for the 1.2.11 release build
+
 ## [v1.2.10] - 2026-03-07
 
 ### Fixed

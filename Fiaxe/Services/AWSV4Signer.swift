@@ -143,10 +143,12 @@ nonisolated enum AWSV4Signer {
 
     /// Generates a presigned GET URL valid for `expiresIn` seconds.
     /// The resulting URL can be fetched without any auth headers.
+    /// Generates a presigned GET URL valid for `expiresIn` seconds (default: 15 minutes).
+    /// Keep expiration short to limit exposure if a URL is leaked.
     static func presignedURL(
         for key: String,
         credentials: R2Credentials,
-        expiresIn: Int = 3600,
+        expiresIn: Int = 900,
         date: Date = Date()
     ) -> URL? {
         let region = "auto"
@@ -155,10 +157,13 @@ nonisolated enum AWSV4Signer {
         let shortDate = shortDateString(from: date)
         let credentialScope = "\(shortDate)/\(region)/\(service)/aws4_request"
 
-        // Build the base URL using URLComponents to preserve slashes
+        // Build the base URL using URLComponents to preserve slashes.
+        // Use the same strict S3-safe character set as uriEncode to avoid ambiguity.
+        var s3PathAllowed = CharacterSet.alphanumerics
+        s3PathAllowed.insert(charactersIn: "-._~")
         let encodedKey = key
             .components(separatedBy: "/")
-            .map { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? $0 }
+            .map { $0.addingPercentEncoding(withAllowedCharacters: s3PathAllowed) ?? $0 }
             .joined(separator: "/")
         var comps = URLComponents()
         comps.scheme = "https"

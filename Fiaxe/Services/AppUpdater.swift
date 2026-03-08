@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import CryptoKit
 import AppKit
 import Darwin
 import Observation
@@ -14,6 +15,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
     enum State {
         case idle
         case downloading(Double)   // 0.0 – 1.0
+        case verifying
         case downloaded(URL)
         case installing
         case failed(String)
@@ -32,6 +34,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
     var state: State = .idle
 
     private var downloadTask: URLSessionDownloadTask?
+    private var expectedChecksumURL: URL?
     private let cachedDMGURL: URL = {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return base.appendingPathComponent("R2Vault", isDirectory: true)
@@ -70,6 +73,12 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
             return
         }
 
+        guard let checksumURL = release.dmgChecksumURL else {
+            state = .failed("This release is missing its checksum file, so the update was blocked.")
+            return
+        }
+
+        expectedChecksumURL = checksumURL
         state = .downloading(0)
 
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
@@ -80,6 +89,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
     func cancel() {
         downloadTask?.cancel()
         downloadTask = nil
+        expectedChecksumURL = nil
         state = .idle
     }
 
@@ -130,7 +140,18 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         }
 
         Task { @MainActor in
-            self.state = .downloaded(dest)
+            self.downloadTask = nil
+            self.state = .verifying
+
+            do {
+                try await self.verifyDownloadedDMG(at: dest, checksumURL: self.expectedChecksumURL)
+                self.expectedChecksumURL = nil
+                self.state = .downloaded(dest)
+            } catch {
+                self.expectedChecksumURL = nil
+                try? FileManager.default.removeItem(at: dest)
+                self.state = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -140,8 +161,25 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         // Cancellations are intentional — don't show error
         if (error as NSError).code == NSURLErrorCancelled { return }
         Task { @MainActor in
+            self.downloadTask = nil
+            self.expectedChecksumURL = nil
             self.state = .failed(error.localizedDescription)
         }
+    }
+
+    private func verifyDownloadedDMG(at dmgURL: URL, checksumURL: URL?) async throws {
+        guard let checksumURL else {
+            throw UpdateError.missingChecksumAsset
+        }
+
+        let expectedChecksum = try await fetchExpectedChecksum(from: checksumURL, fileName: dmgURL.lastPathComponent)
+        let actualChecksum = try sha256(of: dmgURL)
+
+        guard actualChecksum.caseInsensitiveCompare(expectedChecksum) == .orderedSame else {
+            throw UpdateError.checksumMismatch(expected: expectedChecksum, actual: actualChecksum)
+        }
+
+        log("Verified DMG checksum for: \(dmgURL.lastPathComponent)")
     }
 
     // MARK: - Mount & Install
@@ -185,18 +223,39 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
                 _ = try await self.runProcess("/usr/bin/ditto", args: [sourceApp.path, tempApp.path], timeout: 120)
                 self.log("Copied to temp: \(tempApp.path)")
 
-                // 5. Unmount early (temp copy is done)
+                // 5. Verify the code signature of the extracted app
+                try await self.verifyCodeSignature(at: tempApp)
+                self.log("Code signature verified for: \(tempApp.path)")
+
+                // 6. Unmount early (temp copy is done)
                 _ = try? await self.runProcess("/usr/bin/hdiutil", args: ["detach", mountPoint, "-quiet"], timeout: 30)
 
-                // 6. Replace after this app exits, then relaunch
+                // 7. Replace after this app exits, then relaunch
                 let pid = ProcessInfo.processInfo.processIdentifier
                 let escapedTemp = self.shellEscape(tempApp.path)
                 let escapedDest = self.shellEscape(destApp.path)
+                let stagedDest = destApp.deletingLastPathComponent().appendingPathComponent(destApp.lastPathComponent + ".incoming")
+                let backupDest = destApp.deletingLastPathComponent().appendingPathComponent(destApp.lastPathComponent + ".backup")
+                let escapedStagedDest = self.shellEscape(stagedDest.path)
+                let escapedBackupDest = self.shellEscape(backupDest.path)
                 let escapedDMG = self.shellEscape(dmg.path)
                 let script = """
+                set -e
                 while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done
-                /bin/rm -rf \(escapedDest)
-                /usr/bin/ditto \(escapedTemp) \(escapedDest)
+                /bin/rm -rf \(escapedStagedDest) \(escapedBackupDest)
+                /usr/bin/ditto \(escapedTemp) \(escapedStagedDest)
+                if [ -d \(escapedDest) ]; then
+                  /bin/mv \(escapedDest) \(escapedBackupDest)
+                fi
+                if /bin/mv \(escapedStagedDest) \(escapedDest); then
+                  /bin/rm -rf \(escapedBackupDest)
+                else
+                  /bin/rm -rf \(escapedStagedDest)
+                  if [ -d \(escapedBackupDest) ]; then
+                    /bin/mv \(escapedBackupDest) \(escapedDest)
+                  fi
+                  exit 1
+                fi
                 /usr/bin/xattr -dr com.apple.quarantine \(escapedDest) 2>/dev/null
                 /bin/rm -rf \(escapedTemp)
                 /bin/rm -f \(escapedDMG)
@@ -279,8 +338,11 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         }.value
     }
 
+    /// Escapes a file path for safe inclusion in a shell script.
+    /// Uses single quotes to prevent all shell interpretation, with proper escaping
+    /// of any single quotes within the path itself.
     private func shellEscape(_ value: String) -> String {
-        "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     private func determineInstallDestination(appName: String, preferred: URL) throws -> URL {
@@ -304,6 +366,127 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
 
     private func isRunningFromXcodeBuild(path: String) -> Bool {
         path.contains("/DerivedData/") || path.contains("/Build/Products/")
+    }
+
+    /// Verifies the code signature of an app bundle using `codesign`.
+    /// Also checks that the signing team identifier matches the currently running app
+    /// to prevent an attacker from replacing the DMG with a differently-signed app.
+    private func verifyCodeSignature(at appURL: URL) async throws {
+        // 1. Basic signature validity check
+        _ = try await runProcess("/usr/bin/codesign", args: [
+            "--verify", "--deep", "--strict", appURL.path
+        ], timeout: 30)
+
+        guard let updateBundleID = Bundle(url: appURL)?.bundleIdentifier,
+              let currentBundleID = Bundle.main.bundleIdentifier,
+              updateBundleID == currentBundleID else {
+            throw UpdateError.codeSignatureInvalid("Bundle identifier mismatch.")
+        }
+
+        // 2. Extract the team identifier of the update
+        let updateInfo = try await runProcess("/usr/bin/codesign", args: [
+            "-dv", "--verbose=2", appURL.path
+        ], timeout: 15)
+        // codesign -dv prints to stderr
+        let updateOutput = updateInfo.stderr
+        let updateTeamID = extractTeamIdentifier(from: updateOutput)
+
+        // 3. Extract the team identifier of the currently running app
+        guard let runningAppPath = Bundle.main.bundleURL.path.removingPercentEncoding else {
+            throw UpdateError.couldNotDetermineAppPath
+        }
+        let currentInfo = try await runProcess("/usr/bin/codesign", args: [
+            "-dv", "--verbose=2", runningAppPath
+        ], timeout: 15)
+        let currentOutput = currentInfo.stderr
+        let currentTeamID = extractTeamIdentifier(from: currentOutput)
+
+        guard let currentTeamID else {
+            log("Warning: Running app has no team identifier — allowing update after checksum and bundle ID verification.")
+            return
+        }
+
+        // 4. Ensure team identifiers match
+        guard let updateTeamID else {
+            throw UpdateError.codeSignatureInvalid("The update is missing a team identifier.")
+        }
+
+        guard updateTeamID == currentTeamID else {
+            throw UpdateError.codeSignatureInvalid(
+                "Team identifier mismatch: update=\(updateTeamID), running=\(currentTeamID). The update may have been tampered with."
+            )
+        }
+    }
+
+    private func fetchExpectedChecksum(from checksumURL: URL, fileName: String) async throws -> String {
+        var request = URLRequest(url: checksumURL, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.setValue("text/plain", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw UpdateError.invalidChecksumAsset
+        }
+
+        let contents = String(decoding: data, as: UTF8.self)
+        guard let checksum = parseChecksum(contents, fileName: fileName) else {
+            throw UpdateError.invalidChecksumAsset
+        }
+
+        return checksum
+    }
+
+    private func parseChecksum(_ contents: String, fileName: String) -> String? {
+        let validCharacterSet = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+
+        for line in contents.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+
+            let pieces = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            guard let candidate = pieces.first,
+                  candidate.count == 64,
+                  candidate.rangeOfCharacter(from: validCharacterSet.inverted) == nil else {
+                continue
+            }
+
+            if pieces.count == 1 {
+                return candidate.lowercased()
+            }
+
+            let matchedFileName = pieces.dropFirst().last?.replacingOccurrences(of: "*", with: "")
+            if matchedFileName == fileName {
+                return candidate.lowercased()
+            }
+        }
+
+        return nil
+    }
+
+    private func sha256(of fileURL: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+
+        var hasher = SHA256()
+        while true {
+            let data = try handle.read(upToCount: 64 * 1024) ?? Data()
+            if data.isEmpty { break }
+            hasher.update(data: data)
+        }
+
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func extractTeamIdentifier(from codesignOutput: String) -> String? {
+        for line in codesignOutput.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("TeamIdentifier=") {
+                let value = String(trimmed.dropFirst("TeamIdentifier=".count))
+                return value.isEmpty || value == "not set" ? nil : value
+            }
+        }
+        return nil
     }
 
     private func withTimeout<T>(_ seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
@@ -350,17 +533,27 @@ private struct ProcessResult {
 
 enum UpdateError: LocalizedError {
     case appNotFoundInDMG
+    case checksumMismatch(expected: String, actual: String)
     case couldNotDetermineAppPath
     case couldNotMountDMG
+    case invalidChecksumAsset
+    case missingChecksumAsset
     case shellFailed(String, Int32, String)
     case timedOut(String, TimeInterval)
     case notWritableInstallLocation
+    case codeSignatureInvalid(String)
 
     var errorDescription: String? {
         switch self {
         case .appNotFoundInDMG:        return "Could not find .app inside the DMG."
+        case .checksumMismatch:
+            return "The downloaded update failed checksum verification and was removed."
         case .couldNotDetermineAppPath: return "Could not determine the running app path."
         case .couldNotMountDMG:        return "Could not mount the DMG."
+        case .invalidChecksumAsset:
+            return "The release checksum file was invalid or did not match the DMG asset."
+        case .missingChecksumAsset:
+            return "The release is missing its checksum file, so the update was blocked."
         case .shellFailed(let cmd, let code, let details):
             let trimmed = details.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty
@@ -370,6 +563,8 @@ enum UpdateError: LocalizedError {
             return "\(cmd) timed out after \(Int(seconds)) seconds."
         case .notWritableInstallLocation:
             return "The app can't write to the install location. Move R2 Vault into /Applications (or ~/Applications) and try again."
+        case .codeSignatureInvalid(let reason):
+            return "Code signature verification failed: \(reason)"
         }
     }
 }

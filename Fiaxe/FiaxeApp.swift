@@ -103,9 +103,8 @@ private extension View {
 
 // MARK: - App Delegate
 
-/// Prevents the app from quitting when the main window is closed.
-/// Combined with LSUIElement = YES in Info.plist, the app lives only
-/// in the menu bar and never appears in the Dock or app switcher.
+/// Prevents the app from quitting when the main window is closed,
+/// so it can continue living in the menu bar.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
