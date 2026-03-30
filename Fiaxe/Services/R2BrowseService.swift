@@ -184,7 +184,7 @@ nonisolated enum R2BrowseService {
         let rawPath = "/\(credentials.bucketName)/\(encodedKey)"
         var comps = URLComponents()
         comps.scheme = "https"
-        comps.host = "\(credentials.accountId).r2.cloudflarestorage.com"
+        comps.host = credentials.endpointHost
         comps.percentEncodedPath = rawPath
         return comps.url
     }

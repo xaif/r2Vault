@@ -18,7 +18,7 @@ nonisolated enum AWSV4Signer {
         date: Date = Date()
     ) -> URLRequest {
         var request = request
-        let region = "auto"
+        let region = credentials.jurisdiction.rawValue
         let service = "s3"
 
         let amzDate = amzDateString(from: date)
@@ -151,7 +151,7 @@ nonisolated enum AWSV4Signer {
         expiresIn: Int = 900,
         date: Date = Date()
     ) -> URL? {
-        let region = "auto"
+        let region = credentials.jurisdiction.rawValue
         let service = "s3"
         let amzDate = amzDateString(from: date)
         let shortDate = shortDateString(from: date)
@@ -167,7 +167,7 @@ nonisolated enum AWSV4Signer {
             .joined(separator: "/")
         var comps = URLComponents()
         comps.scheme = "https"
-        comps.host = "\(credentials.accountId).r2.cloudflarestorage.com"
+        comps.host = credentials.endpointHost
         comps.percentEncodedPath = "/\(credentials.bucketName)/\(encodedKey)"
 
         // Required presign query parameters (must be sorted for canonical QS)
@@ -184,7 +184,7 @@ nonisolated enum AWSV4Signer {
         // Canonical request with UNSIGNED-PAYLOAD (standard for presigned URLs)
         let canonicalURI = canonicalPath(from: url)
         let canonicalQS  = canonicalQueryString(from: url)
-        let host = "\(credentials.accountId).r2.cloudflarestorage.com"
+        let host = credentials.endpointHost
         let canonicalHeaders = "host:\(host)\n"
         let signedHeaders    = "host"
         let payloadHash      = "UNSIGNED-PAYLOAD"
