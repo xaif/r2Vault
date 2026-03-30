@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var secretAccessKey = ""
     @State private var bucketName = ""
     @State private var customDomain = ""
+    @State private var jurisdiction: R2Jurisdiction = .auto
     @State private var isTesting = false
     @State private var testResult: String?
     @State private var saved = false
@@ -42,7 +43,12 @@ struct SettingsView: View {
 
     private var hasUnsavedChanges: Bool {
         guard let selectedCredentials else {
-            return !accountId.isEmpty || !accessKeyId.isEmpty || !secretAccessKey.isEmpty || !bucketName.isEmpty || !customDomain.isEmpty
+            return !accountId.isEmpty
+                || !accessKeyId.isEmpty
+                || !secretAccessKey.isEmpty
+                || !bucketName.isEmpty
+                || !customDomain.isEmpty
+                || jurisdiction != .auto
         }
 
         return accountId != selectedCredentials.accountId
@@ -50,6 +56,7 @@ struct SettingsView: View {
             || secretAccessKey != selectedCredentials.secretAccessKey
             || bucketName != selectedCredentials.bucketName
             || customDomain != (selectedCredentials.customDomain ?? "")
+            || jurisdiction != selectedCredentials.jurisdiction
     }
 
     var body: some View {
@@ -221,6 +228,19 @@ struct SettingsView: View {
 
                 inputRow(title: "Bucket Name", symbol: "shippingbox.fill", prompt: "Enter bucket name") {
                     configuredTextField("Bucket Name", text: $bucketName)
+                }
+
+                inputDivider
+
+                inputRow(title: "Jurisdiction", symbol: "globe.europe.africa.fill", prompt: "Choose data jurisdiction") {
+                    Picker("Jurisdiction", selection: $jurisdiction) {
+                        ForEach(R2Jurisdiction.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+#if os(iOS)
+                    .pickerStyle(.menu)
+#endif
                 }
             }
             .padding(.horizontal, 16)
@@ -543,6 +563,11 @@ struct SettingsView: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 #endif
+            Picker("Jurisdiction", selection: $jurisdiction) {
+                ForEach(R2Jurisdiction.allCases) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
         }
     }
 
@@ -636,6 +661,7 @@ struct SettingsView: View {
         secretAccessKey = creds.secretAccessKey
         bucketName = creds.bucketName
         customDomain = creds.customDomain ?? ""
+        jurisdiction = creds.jurisdiction
     }
 
     private func clearForm() {
@@ -644,6 +670,7 @@ struct SettingsView: View {
         secretAccessKey = ""
         bucketName = ""
         customDomain = ""
+        jurisdiction = .auto
     }
 
     private func deleteCredentials(id: UUID) {
@@ -682,7 +709,8 @@ struct SettingsView: View {
             accessKeyId: accessKeyId.trimmingCharacters(in: .whitespacesAndNewlines),
             secretAccessKey: secretAccessKey.trimmingCharacters(in: .whitespacesAndNewlines),
             bucketName: bucketName.trimmingCharacters(in: .whitespacesAndNewlines),
-            customDomain: normalizedCustomDomain
+            customDomain: normalizedCustomDomain,
+            jurisdiction: jurisdiction
         )
         customDomain = normalizedCustomDomain ?? ""
         editingCredentialID = creds.id
