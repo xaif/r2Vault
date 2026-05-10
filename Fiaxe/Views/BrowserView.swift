@@ -1226,7 +1226,6 @@ private struct MacRemoteDocumentPreviewView: View {
     @State private var isDownloading = false
     @State private var showDeleteConfirm = false
     @State private var didCopyURL = false
-    @State private var player: AVPlayer?
 
     private func startDownload() {
         guard !isDownloading else { return }
@@ -1296,17 +1295,7 @@ private struct MacRemoteDocumentPreviewView: View {
                 case .pdf:
                     MacPDFPreview(url: item.downloadURL)
                 case .media:
-                    VideoPlayer(player: player)
-                        .onAppear {
-                            if player == nil {
-                                let newPlayer = AVPlayer(url: item.downloadURL)
-                                player = newPlayer
-                                newPlayer.play()
-                            }
-                        }
-                        .onDisappear {
-                            player?.pause()
-                        }
+                    MacMediaPreview(url: item.downloadURL)
                 case .quickLook:
                     ContentUnavailableView(
                         "Preview in Quick Look",
@@ -1355,6 +1344,57 @@ private struct MacRemoteDocumentPreviewView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will permanently remove the file from R2 and cannot be undone.")
+        }
+    }
+}
+
+private struct MacMediaPreview: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.controlsStyle = .inline
+        view.showsFullScreenToggleButton = true
+        view.videoGravity = .resizeAspect
+        context.coordinator.configure(view: view, url: url)
+        return view
+    }
+
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        context.coordinator.configure(view: nsView, url: url)
+    }
+
+    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: Coordinator) {
+        coordinator.tearDown(view: nsView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        private var currentURL: URL?
+        private var player: AVPlayer?
+
+        func configure(view: AVPlayerView, url: URL) {
+            guard currentURL != url else { return }
+            tearDown(view: view)
+            currentURL = url
+            let newPlayer = AVPlayer(url: url)
+            view.player = newPlayer
+            player = newPlayer
+            newPlayer.play()
+        }
+
+        func tearDown(view: AVPlayerView) {
+            player?.pause()
+            view.player = nil
+            player = nil
+            currentURL = nil
+        }
+
+        deinit {
+            player?.pause()
         }
     }
 }
