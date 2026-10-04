@@ -17,7 +17,7 @@ struct ContentView: View {
         @Bindable var viewModel = viewModel
 
 #if os(macOS)
-        macOSLayout
+        onboardingOr(macOSLayout)
             .alert("Error", isPresented: $viewModel.showAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -43,7 +43,7 @@ struct ContentView: View {
                 }
             }
 #else
-        iOSLayout
+        onboardingOr(iOSLayout)
             .alert("Error", isPresented: $viewModel.showAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -54,6 +54,21 @@ struct ContentView: View {
                     .environment(viewModel)
             }
 #endif
+    }
+
+    /// Shows the welcome walkthrough in place of the app until it's finished.
+    @ViewBuilder
+    private func onboardingOr<Layout: View>(_ layout: Layout) -> some View {
+        Group {
+            if viewModel.showOnboarding {
+                OnboardingView()
+                    .transition(.opacity)
+            } else {
+                layout
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: viewModel.showOnboarding)
     }
 
 #if os(macOS)

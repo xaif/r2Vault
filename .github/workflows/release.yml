@@ -13,7 +13,8 @@ on:
 
 jobs:
   build-and-release:
-    runs-on: macos-15
+    # The Finder drive uses macOS 27 APIs, which need Xcode 27.
+    runs-on: xcode-27
     permissions:
       contents: write
     env:
@@ -27,7 +28,9 @@ jobs:
           fetch-depth: 0
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.0.1.app
+        run: |
+          sudo xcode-select -s /Applications/Xcode_27.0.app
+          xcodebuild -version
 
       - name: Build
         run: |
@@ -39,18 +42,21 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            MACOSX_DEPLOYMENT_TARGET=15.0 \
+            MACOSX_DEPLOYMENT_TARGET=26.0 \
             clean build
 
       - name: Ad-hoc Code Sign
         run: |
           APP=$(find build/Build/Products/Release -name "*.app" -maxdepth 1 | head -1)
-          # Ad-hoc sign (free, no developer account needed)
-          # --force replaces any existing signature
-          # --deep signs nested frameworks/binaries
-          codesign --force --deep --sign - "$APP"
+          # Ad-hoc sign (free, no developer account needed), inside out: the Finder drive
+          # extension first, with its entitlements (it must be sandboxed or macOS won't load
+          # it), then the app. `--deep` would re-sign the extension without them.
+          EXT="$APP/Contents/PlugIns/R2VaultFileProvider.appex"
+          codesign --force --sign - --entitlements Config/R2VaultFileProvider.entitlements "$EXT"
+          codesign --force --sign - "$APP"
           echo "Signed: $APP"
-          codesign --verify --verbose "$APP" || true
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -d --entitlements - "$EXT" | grep -q app-sandbox
 
       - name: Create DMG
         run: |

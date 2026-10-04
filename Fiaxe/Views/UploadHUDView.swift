@@ -17,6 +17,7 @@ private extension View {
 /// Only visible when there are active, pending, or recently-completed uploads.
 struct UploadHUDView: View {
     @Environment(AppViewModel.self) private var viewModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = true
 
     private var activeTasks: [FileUploadTask] {
@@ -333,11 +334,17 @@ struct UploadHUDView: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(
                         LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.82),
-                                Color.accentColor.opacity(0.08),
-                                Color.white.opacity(0.72)
-                            ],
+                            colors: colorScheme == .dark
+                                ? [
+                                    Color.white.opacity(0.06),
+                                    Color.white.opacity(0.03),
+                                    Color.white.opacity(0.02)
+                                ]
+                                : [
+                                    Color.white.opacity(0.82),
+                                    Color.white.opacity(0.76),
+                                    Color.white.opacity(0.72)
+                                ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -348,8 +355,8 @@ struct UploadHUDView: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.5),
-                                Color.white.opacity(0.08),
+                                Color.white.opacity(colorScheme == .dark ? 0.10 : 0.5),
+                                Color.white.opacity(colorScheme == .dark ? 0.02 : 0.08),
                                 .clear
                             ],
                             startPoint: .top,
@@ -359,19 +366,11 @@ struct UploadHUDView: View {
                     .padding(1)
                     .blendMode(.screen)
             }
-            .overlay(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.1))
-                    .frame(width: 140, height: 140)
-                    .blur(radius: 28)
-                    .offset(x: 36, y: 42)
-                    .allowsHitTesting(false)
-            }
 #endif
     }
 
     private var hudBorder: Color {
-        Color.white.opacity(0.5)
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.white.opacity(0.5)
     }
 }
 

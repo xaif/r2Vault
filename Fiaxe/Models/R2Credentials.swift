@@ -1,27 +1,38 @@
 import Foundation
 
+/// Where a bucket's data is legally kept. Buckets created with a jurisdiction are only
+/// reachable through that jurisdiction's endpoint.
 enum R2Jurisdiction: String, CaseIterable, Codable, Sendable, Identifiable {
     case auto
     case eu
+    case fedramp
+    case us
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .auto:
-            return "Global (Auto)"
-        case .eu:
-            return "European Union (EU)"
+        case .auto: "None (default)"
+        case .eu: "European Union (EU)"
+        case .fedramp: "FedRAMP"
+        case .us: "United States (US)"
         }
     }
 
     var endpointSuffix: String {
         switch self {
-        case .auto:
-            return "r2.cloudflarestorage.com"
-        case .eu:
-            return "eu.r2.cloudflarestorage.com"
+        case .auto: "r2.cloudflarestorage.com"
+        default: "\(rawValue).r2.cloudflarestorage.com"
         }
+    }
+
+    /// The jurisdiction in an S3 endpoint like `https://<account>.eu.r2.cloudflarestorage.com`.
+    init?(endpoint: String) {
+        let withScheme = endpoint.contains("://") ? endpoint : "https://\(endpoint)"
+        guard let host = URLComponents(string: withScheme)?.host?.lowercased(),
+              host.hasSuffix(".r2.cloudflarestorage.com") else { return nil }
+        let labels = host.split(separator: ".")
+        self = labels.count == 5 ? (Self(rawValue: String(labels[1])) ?? .auto) : .auto
     }
 }
 
@@ -57,31 +68,27 @@ struct R2Credentials: Sendable, Codable, Equatable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id
-        case accountId
-        case accessKeyId
-        case secretAccessKey
-        case bucketName
-        case customDomain
-        case jurisdiction
+        case id, accountId, accessKeyId, secretAccessKey, bucketName, customDomain, jurisdiction
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        id = try container.decode(UUID.self, forKey: .id)
         accountId = try container.decode(String.self, forKey: .accountId)
         accessKeyId = try container.decode(String.self, forKey: .accessKeyId)
         secretAccessKey = try container.decode(String.self, forKey: .secretAccessKey)
         bucketName = try container.decode(String.self, forKey: .bucketName)
         customDomain = try container.decodeIfPresent(String.self, forKey: .customDomain)
-        jurisdiction = (try? container.decode(R2Jurisdiction.self, forKey: .jurisdiction)) ?? .auto
+        // Saved before jurisdictions existed, or by a newer version with one this build doesn't know.
+        jurisdiction = (try? container.decodeIfPresent(R2Jurisdiction.self, forKey: .jurisdiction)) ?? .auto
     }
 
-    /// S3-compatible endpoint for this R2 account
+    /// Host of the S3-compatible endpoint for this account and jurisdiction
     var endpointHost: String {
         "\(accountId).\(jurisdiction.endpointSuffix)"
     }
 
+    /// S3-compatible endpoint for this R2 account
     var endpoint: URL {
         URL(string: "https://\(endpointHost)")!
     }

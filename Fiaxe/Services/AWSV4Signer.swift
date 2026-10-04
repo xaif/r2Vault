@@ -18,7 +18,8 @@ nonisolated enum AWSV4Signer {
         date: Date = Date()
     ) -> URLRequest {
         var request = request
-        let region = credentials.jurisdiction.rawValue
+        // R2 always signs with "auto", including jurisdiction endpoints; the host picks the jurisdiction.
+        let region = "auto"
         let service = "s3"
 
         let amzDate = amzDateString(from: date)
@@ -151,7 +152,7 @@ nonisolated enum AWSV4Signer {
         expiresIn: Int = 900,
         date: Date = Date()
     ) -> URL? {
-        let region = credentials.jurisdiction.rawValue
+        let region = "auto"
         let service = "s3"
         let amzDate = amzDateString(from: date)
         let shortDate = shortDateString(from: date)

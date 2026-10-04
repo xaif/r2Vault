@@ -33,6 +33,17 @@
 - Automatic public URL copy to clipboard on upload completion
 - Upload history with copy, download, local removal, and delete actions tied to the correct bucket credentials
 
+**Finder Drive (macOS)**
+- Mount any bucket as a drive in Finder, listed under Locations next to your Mac's disks
+- Files take no disk space until opened, and any app (QuickTime, Final Cut Pro, Photoshop, Preview) can open them directly
+- Large files stream in apps that read them directly (IINA, VLC): only the part being played is downloaded, so a big video starts in a second or two. Apps that open documents through macOS (QuickTime, Preview) download the whole file first, as with iCloud Drive
+- On macOS 27, the whole folder tree is kept listed in the background, so every folder opens instantly (file contents still download only when opened)
+- Downloads don't pile up: use Remove Download in Finder, or let macOS remove them when it needs space. Right-click an item and choose Keep Downloaded to keep it on your Mac. Downloads stop rather than leave less than 2 GB free, and Settings shows how much each drive is using with a Remove Downloads button
+- Large uploads pick up where they left off after a dropped connection, sending only the parts R2 doesn't have yet
+- Create, rename, move, and delete files and folders in Finder; changes sync to R2
+- Deleted items go to the drive's Trash and are removed for good after 30 days
+- Changes made elsewhere show up in Finder while R2 Vault is running
+
 **Menu Bar Widget**
 - Lives in the macOS menu bar — always one click away
 - Drop files directly onto the popover to upload instantly
@@ -60,12 +71,16 @@
 - Share/import handling avoids simple filename collisions and large in-memory fallbacks
 - Custom domain input is normalized to clean `https` URLs before use
 
-## What's New in v1.2.11
+## What's New in v2.0.0
 
-- Hardened release installs with published DMG checksum assets and checksum verification in both the installer and in-app updater
-- Refined the macOS dashboard so it uses a more native glass/material appearance instead of washing out into a white screen
-- Fixed multi-bucket history actions so downloads and deletes continue using the correct credentials after bucket switches
-- Improved dashboard refresh correctness, nested folder counting, batch delete reporting, and safer download/share handling
+- **Finder Drive (macOS):** mount a bucket as a drive in Finder. Files use no disk space until opened, large files stream on demand, and changes made in Finder sync back to R2. On macOS 27, the whole folder tree stays listed in the background so folders open instantly
+- **Jurisdictions:** buckets in the EU, FedRAMP, or US jurisdiction now work. Set it in Settings, or paste the bucket's S3 endpoint during setup
+- **Welcome screen:** a first-launch walkthrough on macOS and iOS that connects your first bucket, checks the connection, and explains how to create an R2 API token
+- **Stays in the menu bar:** ⌘Q now closes R2 Vault's windows instead of quitting. To fully quit, use Quit R2 Vault in the menu bar menu
+- Fixed a crash when previewing videos on macOS
+- The Homebrew cask now requires macOS 26, matching the app's minimum
+
+See the [changelog](CHANGELOG.md) for full details.
 
 ## Screenshot
 
@@ -74,6 +89,8 @@
 </p>
 
 ## Installation
+
+Requires macOS 26.2 or later (macOS 27 supported). The iOS app is available through AltStore/SideStore.
 
 ### Homebrew (Recommended)
 
@@ -120,12 +137,14 @@ Build and run with ⌘R. Requires modern Xcode and current Apple platform SDKs.
 
 ## Getting Started
 
-1. Launch r2Vault — it lives in your **menu bar**
+1. Launch r2Vault. On first launch, a welcome screen walks you through connecting your first bucket, and it checks the connection before saving. On macOS the app then lives in your **menu bar**. To add more buckets later:
 2. Open **Settings** (⌘,) and add your R2 credentials:
    - **Account ID** — found in your Cloudflare dashboard
    - **Access Key ID** & **Secret Access Key** — from an R2 API token
    - **Bucket Name**
    - **Custom Domain** (optional) — for public URL generation
+   - **Jurisdiction** (optional) — only if the bucket was created in one, such as EU
+3. *(Optional, macOS)* Under **Finder Drive** in Settings, turn on **Show in Finder**. The first time, macOS asks you to approve the drive: switch on R2Vault under **System Settings → General → Login Items & Extensions → File Providers**. The bucket then appears in Finder under Locations.
 
 ## Tech Stack
 
@@ -157,6 +176,8 @@ Fiaxe/
 │   ├── ThumbnailCache.swift      # Memory + disk thumbnail cache
 │   ├── UpdateService.swift       # GitHub release update checker
 │   ├── AppUpdater.swift          # Verified in-app updater for macOS releases
+│   ├── FinderDriveManager.swift  # Adds/removes Finder drives, hands them credentials
+│   ├── FinderDriveShared.swift   # Constants + XPC protocol shared with the extension
 │   ├── UploadHistoryStore.swift  # Upload history persistence
 │   └── QuickLookCoordinator.swift
 ├── ViewModels/
@@ -168,6 +189,13 @@ Fiaxe/
     ├── UploadQueueView.swift     # Active uploads HUD
     ├── UploadHistoryView.swift   # Past uploads
     └── ...
+
+R2VaultFileProvider/              # macOS File Provider extension (Finder drive)
+├── FileProviderExtension.swift   # Extension entry point, enumerators, XPC control service
+├── R2Drive.swift                 # Listing, streaming downloads, uploads, moves, Trash
+├── R2Client.swift                # S3 calls incl. ranged GET, multipart upload/copy
+├── ItemDatabase.swift            # SQLite map of stable item IDs to R2 keys + change log
+└── FileProviderItem.swift        # NSFileProviderItem for bucket entries
 ```
 
 ## Changelog

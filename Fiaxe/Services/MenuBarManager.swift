@@ -2,6 +2,22 @@
 import AppKit
 import SwiftUI
 
+/// Fills the popover — including the arrow/notch — with a solid, appearance-adaptive
+/// background so menu-bar content renders consistently in both light and dark mode.
+/// Mirrors BucketDrop's approach; `windowBackgroundColor` resolves per the current
+/// appearance, replacing the fragile makeKey()-only desaturation workaround.
+private final class PopoverBackgroundView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.windowBackgroundColor.set()
+        dirtyRect.fill()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+}
+
 /// Manages a persistent NSStatusItem + NSPopover for the menu bar widget.
 /// Using NSPopover with .applicationDefined behavior means it never auto-dismisses
 /// when the app loses focus — only a click on the status bar icon closes it.
@@ -9,6 +25,7 @@ import SwiftUI
 final class MenuBarManager: NSObject {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var backgroundView: PopoverBackgroundView?
     private let viewModel: AppViewModel
 
     init(viewModel: AppViewModel) {
@@ -58,10 +75,19 @@ final class MenuBarManager: NSObject {
             guard let button = statusItem.button else { return }
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             NSApp.activate(ignoringOtherApps: true)
-            // Force the popover window to always appear active so colors never desaturate.
-            // Dispatched async so the window is fully attached before makeKey() is called.
-            DispatchQueue.main.async {
-                self.popover.contentViewController?.view.window?.makeKey()
+            // Force the popover window to appear active so colors never desaturate, then
+            // back the whole popover (content + arrow/notch) with a solid, appearance-adaptive
+            // color so light/dark mode always renders correctly. The window is attached
+            // synchronously after show(), the same way BucketDrop fixes NSPopover theming.
+            let popoverWindow = popover.contentViewController?.view.window
+            popoverWindow?.makeKey()
+            if let frameView = popoverWindow?.contentView?.superview {
+                if backgroundView == nil || backgroundView?.superview == nil {
+                    let bg = PopoverBackgroundView(frame: frameView.bounds)
+                    bg.autoresizingMask = [.width, .height]
+                    frameView.addSubview(bg, positioned: .below, relativeTo: nil)
+                    backgroundView = bg
+                }
             }
         }
     }

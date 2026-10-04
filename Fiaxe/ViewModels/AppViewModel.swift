@@ -54,9 +54,34 @@ final class AppViewModel {
     /// Set briefly after a successful upload to trigger "Link copied!" toast
     var clipboardToastFileName: String? = nil
 
+    /// True while the welcome walkthrough replaces the main interface.
+    var showOnboarding = false
+    private static let onboardingCompletedKey = "hasCompletedOnboarding"
+
 #if os(macOS)
     /// Registered by the SwiftUI scene to reopen the main window when it has been closed.
     var openMainWindow: (() -> Void)? = nil
+
+    /// Brings the main window to the front, reopening it if it was closed.
+    func showMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        // Find the main app window — must be a titled window, not a panel or popover
+        let appWindow = NSApp.windows.first {
+            !($0 is NSPanel) &&
+            $0.styleMask.contains(.titled) &&
+            !$0.className.contains("StatusBar") &&
+            !$0.className.contains("Popover")
+        }
+        if let window = appWindow {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            // Window was closed — use SwiftUI's openWindow to reopen it
+            openMainWindow?()
+        }
+    }
+
+    /// Buckets mounted in Finder.
+    let finderDrive = FinderDriveManager()
 #endif
 
     // Update state
@@ -183,6 +208,46 @@ final class AppViewModel {
 #if os(iOS)
         processShareInbox()
 #endif
+        syncFinderDrives()
+        decideOnboarding()
+    }
+
+    // MARK: - Onboarding
+
+    /// Shows the walkthrough on a fresh install. People updating from a version without it
+    /// already have a bucket set up, so they're marked as done instead.
+    private func decideOnboarding() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.onboardingCompletedKey) else { return }
+        if credentialsList.isEmpty {
+            showOnboarding = true
+        } else {
+            defaults.set(true, forKey: Self.onboardingCompletedKey)
+        }
+    }
+
+    func presentOnboarding() {
+        showOnboarding = true
+    }
+
+    func completeOnboarding() {
+        UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
+        showOnboarding = false
+    }
+
+    /// Keeps the Finder drives in step with the saved connections.
+    private func syncFinderDrives() {
+#if os(macOS)
+        let credentialsList = credentialsList
+        Task { await finderDrive.sync(with: credentialsList) }
+#endif
+    }
+
+    /// Lets the bucket's Finder drive pick up a change the app just made.
+    private func notifyFinderDrive(_ credentials: R2Credentials) {
+#if os(macOS)
+        finderDrive.bucketDidChange(credentials.id)
+#endif
     }
 
     // MARK: - Credentials
@@ -211,6 +276,7 @@ final class AppViewModel {
         } catch {
             showError("Failed to save credentials: \(error.localizedDescription)")
         }
+        syncFinderDrives()
         selectedCredentialID = creds.id
         if shouldReloadSelectedCredential {
             resetCredentialScopedState(loadCurrentFolder: true)
@@ -228,6 +294,9 @@ final class AppViewModel {
         } catch {
             showError("Failed to save credentials: \(error.localizedDescription)")
         }
+#if os(macOS)
+        Task { await finderDrive.removeDrive(for: id) }
+#endif
 
         if deletedSelectedCredential {
             resetCredentialScopedState(loadCurrentFolder: selectedCredentialID != nil)
@@ -311,6 +380,7 @@ final class AppViewModel {
                     let objects = result.objects
                         .filter { !$0.key.hasSuffix("/") }   // skip zero-byte folder markers
                     let folders = result.folders
+                        .filter { $0.key != FinderDrive.trashPrefix }   // the Finder drive's Trash
                     self.browserObjects = objects
                     self.browserFolders = folders
                     self.browserFolderCache[cacheKey] = BrowserFolderCacheEntry(objects: objects, folders: folders)
@@ -492,6 +562,7 @@ final class AppViewModel {
             try await R2BrowseService.createFolder(credentials: credentials, folderKey: folderKey)
             invalidateBrowserCache()
             loadCurrentFolder()
+            notifyFinderDrive(credentials)
         } catch {
             showError("Failed to create folder: \(error.localizedDescription)")
         }
@@ -507,6 +578,7 @@ final class AppViewModel {
             }
             invalidateBrowserCache()
             loadCurrentFolder()
+            notifyFinderDrive(credentials)
         } catch {
             showError("Failed to delete: \(error.localizedDescription)")
         }
@@ -544,6 +616,7 @@ final class AppViewModel {
 
         invalidateBrowserCache()
         loadCurrentFolder()
+        notifyFinderDrive(credentials)
 
         if !failedItems.isEmpty {
             let sample = failedItems.prefix(3).joined(separator: ", ")
@@ -851,6 +924,7 @@ final class AppViewModel {
                 uploadTask.status = .completed
                 invalidateBrowserCache()
                 loadCurrentFolder()
+                notifyFinderDrive(credentials)
 
                 let item = UploadItem(
                     fileName: uploadTask.fileName,
@@ -974,7 +1048,7 @@ final class AppViewModel {
         Task {
             do {
                 let result = try await R2BrowseService.listObjects(credentials: credentials, prefix: "")
-                let rootFolders = result.folders
+                let rootFolders = result.folders.filter { $0.key != FinderDrive.trashPrefix }
 
                 // Also do a full recursive listing for complete stats
                 let allKeys = try await Self.listAllObjectsWithDetails(credentials: credentials)
@@ -1059,7 +1133,9 @@ final class AppViewModel {
 
             let parser = FullListParser()
             let result = try parser.parse(data: data)
-            allObjects.append(contentsOf: result.objects.filter { !$0.key.hasSuffix("/") })
+            allObjects.append(contentsOf: result.objects.filter {
+                !$0.key.hasSuffix("/") && !$0.key.hasPrefix(FinderDrive.trashPrefix)
+            })
             continuationToken = result.isTruncated ? result.nextContinuationToken : nil
         } while continuationToken != nil
 

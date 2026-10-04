@@ -51,6 +51,12 @@ nonisolated enum R2UploadService {
 
     /// Performs a HEAD request to verify connectivity and credentials.
     static func testConnection(credentials: R2Credentials) async throws -> Bool {
+        try await bucketStatusCode(credentials: credentials) == 200
+    }
+
+    /// Sends a signed HEAD request for the bucket and returns the HTTP status code,
+    /// so callers can tell rejected keys (403) apart from a missing bucket (404).
+    static func bucketStatusCode(credentials: R2Credentials) async throws -> Int {
         let url = await credentials.endpoint.appendingPathComponent(credentials.bucketName)
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
@@ -63,8 +69,7 @@ nonisolated enum R2UploadService {
         )
 
         let (_, response) = try await URLSession.shared.data(for: signedRequest)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-        return statusCode == 200
+        return (response as? HTTPURLResponse)?.statusCode ?? 0
     }
 }
 

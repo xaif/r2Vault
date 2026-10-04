@@ -51,6 +51,25 @@ struct R2VaultApp: App {
                 .disabled(viewModel.updateStatus.isChecking)
                 Divider()
             }
+            // ⌘Q closes the windows but keeps the app alive in the menu bar.
+            // Quitting for real goes through the menu bar's Quit button.
+            CommandGroup(replacing: .appTermination) {
+                Button("Close to Menu Bar") {
+                    appDelegate.closeToMenuBar()
+                }
+                .keyboardShortcut("q")
+                Button("Quit R2 Vault") {
+                    NSApp.terminate(nil)
+                }
+            }
+            CommandGroup(replacing: .help) {
+                Button("Welcome to R2 Vault") {
+                    viewModel.presentOnboarding()
+                    viewModel.showMainWindow()
+                }
+                .disabled(viewModel.showOnboarding)
+                Link("R2 Vault on GitHub", destination: URL(string: "https://github.com/xaif/r2Vault")!)
+            }
         }
 
         Settings {
@@ -108,6 +127,20 @@ private extension View {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
+    }
+
+    /// Closes every app window (main, Settings) and hides the app so focus returns
+    /// to the previous app, leaving only the menu bar icon running.
+    func closeToMenuBar() {
+        for window in NSApp.windows where
+            window.isVisible &&
+            !(window is NSPanel) &&
+            window.styleMask.contains(.titled) &&
+            !window.className.contains("StatusBar") &&
+            !window.className.contains("Popover") {
+            window.close()
+        }
+        NSApp.hide(nil)
     }
 }
 #endif

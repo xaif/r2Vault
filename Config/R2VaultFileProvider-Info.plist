@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>R2Vault Drive</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionFileProviderSupportsEnumeration</key>
+		<true/>
+		<key>NSExtensionFileProviderDownloadPipelineDepth</key>
+		<integer>8</integer>
+		<key>NSExtensionFileProviderUploadPipelineDepth</key>
+		<integer>4</integer>
+		<key>NSExtensionFileProviderActions</key>
+		<array>
+			<dict>
+				<key>NSExtensionFileProviderActionIdentifier</key>
+				<string>fiaxe.Fiaxe.FileProvider.keepDownloaded</string>
+				<key>NSExtensionFileProviderActionName</key>
+				<string>Keep Downloaded</string>
+				<key>NSExtensionFileProviderActionActivationRule</key>
+				<string>SUBQUERY ( fileproviderItems, $fileproviderItem, $fileproviderItem.userInfo.keepDownloaded == false ).@count &gt; 0</string>
+			</dict>
+			<dict>
+				<key>NSExtensionFileProviderActionIdentifier</key>
+				<string>fiaxe.Fiaxe.FileProvider.stopKeepingDownloaded</string>
+				<key>NSExtensionFileProviderActionName</key>
+				<string>Stop Keeping Downloaded</string>
+				<key>NSExtensionFileProviderActionActivationRule</key>
+				<string>SUBQUERY ( fileproviderItems, $fileproviderItem, $fileproviderItem.userInfo.keepDownloaded == true ).@count &gt; 0</string>
+			</dict>
+		</array>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.fileprovider-nonui</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).FileProviderExtension</string>
+	</dict>
+</dict>
+</plist>

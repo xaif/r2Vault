@@ -280,20 +280,7 @@ struct MenuBarView: View {
     }
 
     private func openMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        // Find the main app window — must be a titled window, not a panel or popover
-        let appWindow = NSApp.windows.first {
-            !($0 is NSPanel) &&
-            $0.styleMask.contains(.titled) &&
-            !$0.className.contains("StatusBar") &&
-            !$0.className.contains("Popover")
-        }
-        if let window = appWindow {
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            // Window was closed — use SwiftUI's openWindow to reopen it
-            viewModel.openMainWindow?()
-        }
+        viewModel.showMainWindow()
     }
 
     private func openSettings() {

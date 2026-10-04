@@ -7,7 +7,7 @@ cask "r2vault" do
   desc "Native macOS client for Cloudflare R2 storage"
   homepage "https://github.com/xaif/r2Vault"
 
-  depends_on macos: ">= :sequoia"
+  depends_on macos: ">= :tahoe"
 
   app "R2Vault.app"
 

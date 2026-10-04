@@ -43,11 +43,7 @@ struct SettingsView: View {
 
     private var hasUnsavedChanges: Bool {
         guard let selectedCredentials else {
-            return !accountId.isEmpty
-                || !accessKeyId.isEmpty
-                || !secretAccessKey.isEmpty
-                || !bucketName.isEmpty
-                || !customDomain.isEmpty
+            return !accountId.isEmpty || !accessKeyId.isEmpty || !secretAccessKey.isEmpty || !bucketName.isEmpty || !customDomain.isEmpty
                 || jurisdiction != .auto
         }
 
@@ -94,6 +90,9 @@ struct SettingsView: View {
             connectionsFormSection
             credentialsFormSection
             optionalFormSection
+#if os(macOS)
+            finderDriveFormSection
+#endif
             actionsFormSection
 
 #if os(iOS)
@@ -232,15 +231,10 @@ struct SettingsView: View {
 
                 inputDivider
 
-                inputRow(title: "Jurisdiction", symbol: "globe.europe.africa.fill", prompt: "Choose data jurisdiction") {
-                    Picker("Jurisdiction", selection: $jurisdiction) {
-                        ForEach(R2Jurisdiction.allCases) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-#if os(iOS)
-                    .pickerStyle(.menu)
-#endif
+                inputRow(title: "Jurisdiction", symbol: "building.columns", prompt: "Only for buckets created in a jurisdiction") {
+                    jurisdictionPicker
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                 }
             }
             .padding(.horizontal, 16)
@@ -329,7 +323,7 @@ struct SettingsView: View {
     private var aboutCard: some View {
         settingsCard(title: "About", subtitle: "A compact overview of the current app build.") {
             VStack(spacing: 0) {
-                aboutRow(title: "Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.10")
+                aboutRow(title: "Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")
                 inputDivider
                 aboutRow(title: "Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "10")
                 inputDivider
@@ -544,7 +538,7 @@ struct SettingsView: View {
     }
 
     private var credentialsFormSection: some View {
-        Section("Cloudflare R2 Credentials") {
+        Section {
             TextField("Account ID", text: $accountId)
                 .textContentType(.username)
 #if os(iOS)
@@ -563,10 +557,19 @@ struct SettingsView: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 #endif
-            Picker("Jurisdiction", selection: $jurisdiction) {
-                ForEach(R2Jurisdiction.allCases) { option in
-                    Text(option.displayName).tag(option)
-                }
+            jurisdictionPicker
+        } header: {
+            Text("Cloudflare R2 Credentials")
+        } footer: {
+            Text("Set a jurisdiction only if the bucket was created in one (for example, EU). Its S3 endpoint then looks like <account>.eu.r2.cloudflarestorage.com.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var jurisdictionPicker: some View {
+        Picker("Jurisdiction", selection: $jurisdiction) {
+            ForEach(R2Jurisdiction.allCases) { option in
+                Text(option.displayName).tag(option)
             }
         }
     }
@@ -587,6 +590,68 @@ struct SettingsView: View {
                 .foregroundStyle(customDomainValidationMessage == nil ? Color.secondary : Color.red)
         }
     }
+
+#if os(macOS)
+    @ViewBuilder
+    private var finderDriveFormSection: some View {
+        if let selectedCredentials {
+            let drive = viewModel.finderDrive
+            let id = selectedCredentials.id
+            let error = drive.errors[id]
+            Section {
+                Toggle(isOn: Binding(
+                    get: { drive.isEnabled(id) },
+                    set: { enabled in Task { await drive.setEnabled(enabled, for: selectedCredentials) } }
+                )) {
+                    Text("Show \u{201C}\(selectedCredentials.bucketName)\u{201D} in Finder")
+                }
+                .disabled(drive.pendingIDs.contains(id))
+
+                if drive.awaitingApprovalIDs.contains(id) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("One more step: turn on R2Vault under File Providers in System Settings › General › Login Items & Extensions.",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Open System Settings") {
+                            drive.openExtensionSettings()
+                        }
+                    }
+                } else if drive.isEnabled(id) {
+                    Button("Open in Finder") {
+                        Task { await drive.reveal(selectedCredentials) }
+                    }
+
+                    let removing = drive.removingDownloadsIDs.contains(id)
+                    HStack {
+                        Text("Downloaded on this Mac")
+                        Spacer()
+                        if let bytes = drive.downloadedBytes[id], !removing {
+                            Text(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                    Button("Remove Downloads") {
+                        Task { await drive.removeDownloads(for: selectedCredentials) }
+                    }
+                    .disabled(removing || (drive.downloadedBytes[id] ?? 0) == 0)
+                }
+            } header: {
+                Text("Finder Drive")
+            } footer: {
+                Text(error ?? "The bucket appears in Finder under Locations. Files download when opened (videos stream as they play), and macOS removes downloads when it needs space. Right-click an item to keep it downloaded. Removing downloads leaves files in the bucket. Deleted items stay in the Trash for \(FinderDrive.trashRetentionDays) days.")
+                    .foregroundStyle(error == nil ? Color.secondary : Color.red)
+            }
+            .task(id: drive.isEnabled(id) ? id : nil) {
+                if drive.isEnabled(id) {
+                    await drive.refreshDownloadedBytes(for: selectedCredentials)
+                }
+            }
+        }
+    }
+#endif
 
     private var actionsFormSection: some View {
         Section {
@@ -633,7 +698,7 @@ struct SettingsView: View {
             HStack {
                 Text("Version")
                 Spacer()
-                Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.10")
+                Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")
                     .foregroundStyle(.secondary)
             }
             HStack {

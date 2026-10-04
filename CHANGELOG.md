@@ -2,6 +2,23 @@
 
 All notable changes to R2 Vault are documented here.
 
+## [v2.0.0] - 2026-10-04
+
+### Added
+- Finder Drive on macOS: mount a bucket as a drive in Finder. Files use no disk space until opened, large files stream on demand with read-ahead and parallel downloads, and changes made in Finder sync back to R2. Deleted items are kept in the drive's Trash for 30 days.
+- Finder Drive storage: downloaded files can be removed with Finder's Remove Download, and macOS removes them on its own when it needs space. Right-click any item and choose Keep Downloaded to keep a copy on your Mac. Downloads stop with a clear error instead of leaving less than 2 GB free, so Download Now on a large bucket can't fill the disk. Settings shows how much each drive is using on this Mac, with a Remove Downloads button. Files stay in the bucket.
+- Finder Drive uploads resume: if the connection drops while a large file is uploading, the retry sends only the parts R2 doesn't have yet instead of starting over. Each part is checked against the file first, so edits made in the meantime are uploaded too.
+- macOS 27: the Finder Drive keeps the whole folder tree listed in the background, so folders open instantly.
+- Welcome screen on first launch (macOS and iOS): a short walkthrough that introduces the app, connects your first bucket with a live connection check and step-by-step help for creating an R2 API token, and, on macOS, offers to show the bucket in Finder. You can open it again from Help › Welcome to R2 Vault on macOS. If you're updating and already have a bucket set up, it doesn't appear.
+- Jurisdiction support for buckets created in the EU, FedRAMP, or US jurisdiction. Pick one in Settings, or paste the bucket's S3 endpoint (e.g. `<account>.eu.r2.cloudflarestorage.com`) into the welcome screen and it's detected for you. Existing connections keep working unchanged. Based on [#1](https://github.com/xaif/r2Vault/pull/1) by @rezlerski.
+
+### Changed
+- ⌘Q on macOS now closes R2 Vault's windows and keeps it running in the menu bar. To fully quit, use Quit R2 Vault in the menu bar menu or the app menu.
+
+### Fixed
+- The Homebrew cask now requires macOS 26 (Tahoe), matching the app's minimum; it previously allowed installing on macOS 15, where the app can't launch.
+- Previewing an MP4 or other video on macOS could crash the app. The preview now uses AppKit's player instead of SwiftUI's `VideoPlayer`. Based on [#2](https://github.com/xaif/r2Vault/pull/2) by @tulysa.
+
 ## [v1.2.11] - 2026-03-08
 
 ### Added
