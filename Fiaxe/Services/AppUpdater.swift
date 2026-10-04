@@ -35,6 +35,9 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
 
     private var downloadTask: URLSessionDownloadTask?
     private var expectedChecksumURL: URL?
+    /// The DMG's name in the release. Checksum files list that name, not the local file name
+    /// the download is saved under.
+    private var expectedDMGName: String?
     private let cachedDMGURL: URL = {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return base.appendingPathComponent("R2Vault", isDirectory: true)
@@ -79,6 +82,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         }
 
         expectedChecksumURL = checksumURL
+        expectedDMGName = dmgURL.lastPathComponent
         state = .downloading(0)
 
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
@@ -144,7 +148,8 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
             self.state = .verifying
 
             do {
-                try await self.verifyDownloadedDMG(at: dest, checksumURL: self.expectedChecksumURL)
+                try await self.verifyDownloadedDMG(at: dest, checksumURL: self.expectedChecksumURL,
+                                                   assetName: self.expectedDMGName ?? dest.lastPathComponent)
                 self.expectedChecksumURL = nil
                 self.state = .downloaded(dest)
             } catch {
@@ -167,12 +172,12 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    private func verifyDownloadedDMG(at dmgURL: URL, checksumURL: URL?) async throws {
+    private func verifyDownloadedDMG(at dmgURL: URL, checksumURL: URL?, assetName: String) async throws {
         guard let checksumURL else {
             throw UpdateError.missingChecksumAsset
         }
 
-        let expectedChecksum = try await fetchExpectedChecksum(from: checksumURL, fileName: dmgURL.lastPathComponent)
+        let expectedChecksum = try await fetchExpectedChecksum(from: checksumURL, fileName: assetName)
         let actualChecksum = try sha256(of: dmgURL)
 
         guard actualChecksum.caseInsensitiveCompare(expectedChecksum) == .orderedSame else {

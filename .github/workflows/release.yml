@@ -106,7 +106,9 @@ jobs:
           hdiutil detach "$DEVICE" -quiet
           hdiutil convert "$DMG_TMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_OUT" -ov -quiet
           rm -f "$DMG_TMP"
-          shasum -a 256 "$DMG_OUT" | awk '{print $1 "  r2Vault.dmg"}' > "$CHECKSUM_OUT"
+          # Just the hash: the in-app updaters in 1.2.11 and 2.0.0 compare a file name in this
+          # file against their local download's name and reject it, but accept a bare hash.
+          shasum -a 256 "$DMG_OUT" | awk '{print $1}' > "$CHECKSUM_OUT"
 
           echo "DMG_PATH=$DMG_OUT" >> $GITHUB_ENV
           echo "DMG_SHA256_PATH=$CHECKSUM_OUT" >> $GITHUB_ENV
