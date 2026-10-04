@@ -1,7 +1,7 @@
 {
   "name": "r2Vault Source",
   "subtitle": "Official r2Vault distribution source",
-  "description": "The official AltStore/SideStore source for r2Vault — a native Apple app for managing Cloudflare R2 cloud storage.",
+  "description": "The official AltStore/SideStore source for r2Vault \u2014 a native Apple app for managing Cloudflare R2 cloud storage.",
   "iconURL": "https://raw.githubusercontent.com/xaif/r2Vault/main/assets/app-icon.png",
   "headerURL": "https://raw.githubusercontent.com/xaif/r2Vault/main/assets/screenshot.png",
   "website": "https://github.com/xaif/r2Vault",
@@ -23,6 +23,14 @@
       ],
       "versions": [
         {
+          "version": "2.0.0",
+          "date": "2026-10-04",
+          "localizedDescription": "- New welcome screen that connects your first bucket, with step-by-step help creating an R2 API token\n- Support for buckets in the EU, FedRAMP and US jurisdictions",
+          "downloadURL": "https://github.com/xaif/r2Vault/releases/download/v2.0.0/R2Vault.ipa",
+          "size": 1510243,
+          "minOSVersion": "26.2"
+        },
+        {
           "version": "1.2.11",
           "date": "2026-03-08",
           "localizedDescription": "- Stronger integrity checks with DMG SHA-256 asset verification\n- Safer installation guidance\n- Native macOS glass styling for dashboards\n- Fixed credential-switching issues affecting bucket operations",
@@ -38,6 +46,15 @@
     }
   ],
   "news": [
+    {
+      "title": "r2Vault v2.0.0 Released",
+      "identifier": "r2vault-v2-0-0",
+      "caption": "- New welcome screen that connects your first bucket, with step-by-step help creating an R2 API token\n- Support for buckets in the EU, FedRAMP and US jurisdictions",
+      "date": "2026-10-04",
+      "tintColor": "007AFF",
+      "notify": true,
+      "appID": "fiaxe.r2Vault"
+    },
     {
       "title": "r2Vault v1.2.11 Released",
       "identifier": "r2vault-v1-2-11",

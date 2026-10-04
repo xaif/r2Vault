@@ -39,9 +39,14 @@ fi
 # Get file size in bytes
 IPA_SIZE=$(stat -f%z "$IPA_PATH" 2>/dev/null || stat --printf="%s" "$IPA_PATH" 2>/dev/null)
 
+# Oldest iOS the app runs on, from the app's Info.plist (so AltStore doesn't offer it to older devices)
+APP_PLIST=$(unzip -Z1 "$IPA_PATH" | grep -E '^Payload/[^/]+\.app/Info\.plist$' | head -1)
+MIN_OS=$(unzip -p "$IPA_PATH" "$APP_PLIST" | plutil -extract MinimumOSVersion raw -o - - 2>/dev/null || echo "16.0")
+
 echo "Updating altstore-source.json..."
 echo "  Version:   $VERSION"
 echo "  IPA Size:  $IPA_SIZE bytes"
+echo "  Min iOS:   $MIN_OS"
 echo "  Date:      $DATE"
 echo "  Changelog: $CHANGELOG"
 
@@ -71,7 +76,7 @@ new_version = {
     "localizedDescription": changelog,
     "downloadURL": f"https://github.com/xaif/r2Vault/releases/download/v{version}/R2Vault.ipa",
     "size": ipa_size,
-    "minOSVersion": "16.0"
+    "minOSVersion": "$MIN_OS"
 }
 
 # Prepend the new version to the versions array (newest first)
